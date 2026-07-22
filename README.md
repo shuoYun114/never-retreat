@@ -1,5 +1,7 @@
 # 钢铁前线 / Never Retreat
 
+[English](README_EN.md)
+
 > **Never Retreat**
 
 一款浏览器运行的二战低多边形第一人称战场游戏。支持单人 BOT 战役、房间联机、账号战功、武器商店、兵种配装，以及手机横屏触控操作。
