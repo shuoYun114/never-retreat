@@ -1,0 +1,27 @@
+# 运行时账户数据（密码哈希、玩家资产）
+server/data/accounts.json
+server/data/*.tmp
+
+# NAS / 本地运行日志与进程文件
+server/log/
+server/*.log
+server/*.pid
+
+# 部署和编辑备份
+*.bak
+*.bak.*
+backups/
+
+# 环境和密钥
+.env
+.env.*
+
+# Python / Node 依赖缓存
+__pycache__/
+node_modules/
+
+# OS / 编辑器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
