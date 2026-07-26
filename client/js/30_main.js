@@ -1,4 +1,5 @@
 'use strict';
+let lastSpawnRefresh=0;
 function loop(){
 requestAnimationFrame(loop);
 if(document.hidden) return;
@@ -98,5 +99,7 @@ el('respawnTxt').textContent=respawnCd>0?`(${Math.ceil(respawnCd)})`:'';
 const btn=el('deployBtn');
 btn.disabled=respawnCd>0;
 if(nowT%0.5<0.1) drawDeployMap();
+// 队友的存活状态和附近敌情随时在变，出生点列表要跟着刷
+if(nowT-(lastSpawnRefresh||0)>1){ lastSpawnRefresh=nowT; buildSpawnList(); }
 }
 }

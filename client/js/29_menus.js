@@ -203,11 +203,45 @@ el('deployBtn').style.display=player.alive&&player.deployed?'none':'inline-block
 buildSpawnList();
 drawDeployMap();
 }
+// 战地式规则：队友身边有敌军时不能在他那里复活，避免直接空降到交火点
+function spawnBlocked(x,z){
+for(const c of combatants){
+if(!c.alive||c.team===player.team||c.isPlayer) continue;
+if(Math.hypot(c.pos.x-x,c.pos.z-z)<25) return true;
+}
+if(typeof NetPlay!=='undefined') for(const q of NetPlay.peers.values()){
+const s=q.target;
+if(!s||!s.alive||q.team===player.team) continue;
+if(Math.hypot(s.x-x,s.z-z)<25) return true;
+}
+return false;
+}
+// 可作为出生点的队友：真人队友 + 本小队 BOT
+function mateSpawns(){
+const out=[];
+if(typeof NetPlay!=='undefined'&&NetPlay.started) for(const q of NetPlay.peers.values()){
+const s=q.target;
+if(!s||q.team!==player.team) continue;
+const live=!!s.alive&&!!s.deployed;
+out.push({icon:'●',label:q.name,id:'P'+q.id,x:s.x,z:s.z,live});
+}
+if(typeof SQUAD!=='undefined'&&SQUAD.members) SQUAD.members.forEach((s,i)=>{
+if(!s) return;
+out.push({icon:'◆',label:s.name,id:'S'+i,x:s.pos.x,z:s.pos.z,live:!!s.alive&&!s.onVehicle});
+});
+return out;
+}
 function buildSpawnList(){
 const list=el('spawnList');
 list.innerHTML='';
 const opts=[{name:'主基地',x:BASES[player.team].x,z:BASES[player.team].z,id:-1}];
 FLAGS.forEach((f,i)=>{ if(f.owner===player.team) opts.push({name:f.id+' 点',x:f.x,z:f.z,id:i}); });
+// 队友出生点
+for(const m of mateSpawns()){
+const blocked=m.live&&spawnBlocked(m.x,m.z);
+opts.push({icon:m.icon,name:m.label+(m.live?(blocked?' (附近有敌军)':' (可复活)'):' (阵亡)'),
+id:m.id,x:m.x,z:m.z,disabled:!m.live||blocked});
+}
 // 载具出生选项
 const vehs=[...tanks,...planes].filter(v=>v.team===player.team);
 vehs.forEach((v,i)=>{
@@ -220,7 +254,7 @@ if(!opts.some(o=>!o.disabled&&(o.id===selectedSpawn))) selectedSpawn=-1;
 opts.forEach(o=>{
 const b=document.createElement('button');
 b.className='spawnBtn'+(o.id===selectedSpawn?' sel':'');
-b.textContent='◈ '+o.name;
+b.textContent=(o.icon||'◈')+' '+o.name;
 if(o.disabled){ b.disabled=true; b.style.opacity=0.45; }
 else b.onclick=()=>{ selectedSpawn=o.id; document.querySelectorAll('.spawnBtn').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); };
 list.appendChild(b);
@@ -274,8 +308,16 @@ const vehs=[...tanks,...planes].filter(v=>v.team===p.team);
 const v=vehs[+selectedSpawn.slice(1)];
 if(v&&v.alive&&!v.playerDriven) vehSpawn=v;
 }
+// 队友出生：点击到实际部署之间队友可能已经阵亡或被敌军贴住，这里重新确认一次
+let mateSpawn=null;
+if(typeof selectedSpawn==='string'&&(selectedSpawn[0]==='P'||selectedSpawn[0]==='S')){
+const m=mateSpawns().find(x=>x.id===selectedSpawn);
+if(m&&m.live&&!spawnBlocked(m.x,m.z)) mateSpawn=m;
+else showScorePop('队友出生点已失效，改为主基地');
+}
 let sx,sz;
 if(vehSpawn){ sx=vehSpawn.pos.x; sz=vehSpawn.pos.z; }
+else if(mateSpawn){ sx=mateSpawn.x; sz=mateSpawn.z; }
 else if(selectedSpawn===-1||typeof selectedSpawn==='string'){ sx=BASES[p.team].x; sz=BASES[p.team].z; }
 else {
 const f=FLAGS[selectedSpawn];
