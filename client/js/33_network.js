@@ -81,6 +81,11 @@ receive(e){
  else if(m.type==='latency'){if(Number.isFinite(m.t))this.latency=Math.max(1,Math.round(performance.now()-m.t));}
  else if(m.type==='pings'){for(const [id,v] of Object.entries(m.p||{})){const q=this.peers.get(id);if(q)q.ping=v|0;}}
  else if(m.type==='chat')addChatLine(m.from,m.txt,m.team,m.mine);
+ else if(m.type==='proj'){
+  const q=this.peers.get(m.id);
+  if(q&&typeof spawnRemoteNade==='function')
+   spawnRemoteNade(m.k,q.team,V3(m.x,m.y,m.z),V3(m.vx,m.vy,m.vz),m.f);
+ }
  else if(m.type==='tickets'){
   // 守方无限票在 JSON 里是 null，收回来要还原成 Infinity，否则 HUD 会显示 0
   if(Array.isArray(m.t)){tickets[0]=m.t[0]===null?Infinity:m.t[0];tickets[1]=m.t[1]===null?Infinity:m.t[1];}
@@ -149,6 +154,11 @@ damage(m){
 shoot(target,origin,dir,def,head){
  if(!def?.id)return;
  this.send({type:'shot',target:target.id,w:def.id,ox:origin.x,oy:origin.y,oz:origin.z,dx:dir.x,dy:dir.y,dz:dir.z});
+},
+// 上报投掷物弹道，让同房间的人能看见并躲开（伤害仍由服务端 boom 裁定）
+throwProjectile(kind,pos,vel,fuse){
+ if(!this.started||this.ws?.readyState!==1)return;
+ this.send({type:'proj',k:kind,x:pos.x,y:pos.y,z:pos.z,vx:vel.x,vy:vel.y,vz:vel.z,f:fuse});
 },
 // 上报"哪种爆炸、炸在哪"，威力与半径由服务端爆炸表裁定。
 // 顺带把"这个目标被掩体挡住了"告诉服务端——这只会让伤害变小，所以服务端可以采信。

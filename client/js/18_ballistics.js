@@ -123,12 +123,30 @@ const nadeGeoGER=new THREE.CylinderGeometry(0.035,0.035,0.24,8);
 const nadeGeoAT=new THREE.CylinderGeometry(0.06,0.075,0.3,8);
 const nadeGeoSmoke=new THREE.CylinderGeometry(0.048,0.048,0.13,8);
 const smokeCanMat=new THREE.MeshLambertMaterial({color:0x8a9088});
-function throwNade(thrower,origin,vel,fuse,at,smoke){
-const m=new THREE.Mesh(smoke?nadeGeoSmoke:(at?nadeGeoAT:(TEAM_FACTION[thrower.team].nade==='egg'?nadeGeoUS:nadeGeoGER)),smoke?smokeCanMat:(at?vmMats.gunL:vmMats.nade));
+function nadeMesh(team,at,smoke){
+const m=new THREE.Mesh(smoke?nadeGeoSmoke:(at?nadeGeoAT:(TEAM_FACTION[team].nade==='egg'?nadeGeoUS:nadeGeoGER)),smoke?smokeCanMat:(at?vmMats.gunL:vmMats.nade));
 m.castShadow=true;
+return m;
+}
+function throwNade(thrower,origin,vel,fuse,at,smoke){
+const m=nadeMesh(thrower.team,at,smoke);
 m.position.copy(origin);
 scene.add(m);
-nades.push({m,pos:origin.clone(),vel:vel.clone(),fuse:fuse!==undefined?fuse:3.4,thrower,team:thrower.team,spin:V3(rand(-6,6),rand(-6,6),rand(-6,6)),bounces:0,at:!!at,smokeN:!!smoke});
+const f=fuse!==undefined?fuse:3.4;
+nades.push({m,pos:origin.clone(),vel:vel.clone(),fuse:f,thrower,team:thrower.team,spin:V3(rand(-6,6),rand(-6,6),rand(-6,6)),bounces:0,at:!!at,smokeN:!!smoke});
+// 让同房间的真人看到这颗雷飞过来（伤害仍由服务端裁定，这里只同步弹道）
+if(thrower&&thrower.isPlayer&&typeof NetPlay!=='undefined')
+NetPlay.throwProjectile(smoke?'smoke':(at?'at':'nade'),origin,vel,f);
+}
+// 别人扔过来的投掷物：只做可见的弹道与爆炸表现，不在本地造成任何伤害
+function spawnRemoteNade(kind,team,pos,vel,fuse){
+const at=kind==='at',smoke=kind==='smoke';
+const m=nadeMesh(team,at,smoke);
+m.position.copy(pos);
+scene.add(m);
+nades.push({m,pos:pos.clone(),vel:vel.clone(),fuse:fuse,
+thrower:{isPlayer:false,team,name:'敌军',kills:0,score:0,damage(){}},team,
+spin:V3(rand(-6,6),rand(-6,6),rand(-6,6)),bounces:0,at,smokeN:smoke,remote:true});
 }
 function updateNades(dt){
 for(let i=nades.length-1;i>=0;i--){
@@ -207,6 +225,13 @@ if(n.team!==player.team&&player.alive&&n.pos.distanceTo(player.pos)<7) nadeWarnT
 function nadeExplode(n){
 if(n.smokeN){
 spawnSmokeCloud(n.pos);
+return;
+}
+// 远端投掷物：伤害由服务端裁定并下发，本地只放表现，避免重复计算
+if(n.remote){
+if(n.at||n.mortar) explosionFXSmall(n.pos); else explosionFX(n.pos);
+AudioSys.explosion(n.pos.distanceTo(camera.position));
+crater(n.pos.x,n.pos.z,n.at?1.1:0.9,true);
 return;
 }
 // 掉进敞篷战斗舱: 舱内爆炸 → 重创车辆并杀伤全部乘员

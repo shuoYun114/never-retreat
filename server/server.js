@@ -5,6 +5,7 @@ const http=require('http'),crypto=require('crypto'),fs=require('fs'),path=requir
 const {createStore}=require('./lib/account_store');
 const {createMatchStore}=require('./lib/match_store');
 const {WEAPON_META,minShotInterval}=require('./lib/weapon_meta');
+const {createTerrain}=require('./lib/terrain');
 
 const PORT=Number(process.env.PORT||18080),HOST=process.env.HOST||'0.0.0.0';
 const ALLOW_ORIGIN=process.env.ALLOW_ORIGIN||'*';
@@ -31,6 +32,9 @@ const EXPLOSION={
  shell_at:{r:5,  dmg:70,               maxRange:270,gap:2200}
 };
 const MIN_RANKED_MS=120000;            // 对局至少打这么久，才登记场次与胜负
+// 地形遮挡判定：沿射线步进比对地形高度。容差取得比较宽松，
+// 宁可漏判也不能误判——把老实玩家的正常射击判成穿墙比放过一个外挂更糟。
+const LOS_STEP=2,LOS_TOL=0.6,LOS_SKIP_NEAR=3;
 const MSG_PER_SEC=90,PING_MS=25000,IDLE_MS=70000,SWEEP_MS=30000;
 const log=(...a)=>console.log(new Date().toISOString(),...a);
 
@@ -323,6 +327,23 @@ function state(w,s){
  w.state={x,y,z,yaw,pitch,alive:!!s.alive&&w.hp>0,deployed:!!s.deployed,cls:Math.max(0,Math.min(7,+s.cls||0))};
  cast(rooms.get(w.room),{type:'state',id:w.id,state:w.state,hp:w.hp},w);
 }
+// 房间对应的地形：战役由大厅配置决定，服务端自己复现高度场，不依赖客户端上报
+function terrainOf(w){
+ const l=lobbies.get(w.room);
+ if(!l)return null;
+ if(!l.terrain)l.terrain=guard('terrain',()=>createTerrain(l.config.campaign))||null;
+ return l.terrain;
+}
+// 射线是否被山体/地形挡住。只判地形：建筑可被炸毁，服务端没有摧毁信息，
+// 拿静态建筑做判定会把打穿破墙的正常射击误判成穿墙。
+function terrainBlocks(t,ox,oy,oz,dx,dy,dz,dist){
+ if(!t)return false;
+ for(let s=LOS_SKIP_NEAR;s<dist-LOS_SKIP_NEAR;s+=LOS_STEP){
+  const y=oy+dy*s;
+  if(t.heightAt(ox+dx*s,oz+dz*s)>y+LOS_TOL)return true;
+ }
+ return false;
+}
 // 扣血 / 击杀 / 发功：子弹与爆炸共用同一套记账，返回要广播的事件
 function hurt(w,q,dmg,head,r){
  if(!(dmg>0))return null;
@@ -361,7 +382,9 @@ function shot(w,m){
  const ox=num(m.ox,-270,270),oy=num(m.oy,-20,180),oz=num(m.oz,-270,270);
  const dx=num(m.dx,-1.1,1.1),dy=num(m.dy,-1.1,1.1),dz=num(m.dz,-1.1,1.1);
  if([ox,oy,oz,dx,dy,dz].includes(null))return;
- if(Math.abs(Math.hypot(dx,dy,dz)-1)>.1)return;
+ // 客户端各条开火路径都会 normalize()，这里收紧到 0.02：
+ // 非单位向量会让下面的投影/垂距计算出现与长度成正比的偏差，宁可直接拒收
+ if(Math.abs(Math.hypot(dx,dy,dz)-1)>.02)return;
  // 开枪点必须贴着本人上报的位置，杜绝隔图开枪
  const tol=meta.vehicle?ORIGIN_TOL_VEH:ORIGIN_TOL;
  if(Math.hypot(ox-w.state.x,oy-(w.state.y+1.15),oz-w.state.z)>tol)return;
@@ -369,12 +392,31 @@ function shot(w,m){
  if(t<0||t>MAX_RANGE)return;
  const ex=vx-dx*t,ey=vy-dy*t,ez=vz-dz*t;
  if(ex*ex+ey*ey+ez*ez>HIT_RADIUS2)return;
+ if(terrainBlocks(terrainOf(w),ox,oy,oz,dx,dy,dz,t))return;   // 隔着山头打不中
  w.shotAt=now;
  // 爆头由服务端按几何判定，不采信客户端的 head 标记
  const head=Math.abs(oy+dy*t-(q.state.y+1.62))<HEAD_TOL;
  const mul=meta.vehicle?1:attachDamageMul(w.user,w.state.cls);
  const ev=hurt(w,q,meta.dmg*(head?meta.headMul:1)*mul,head,r);
  if(ev)cast(r,ev);
+}
+// 投掷物弹道转发：只为让同房间的人看见并躲开，不参与任何伤害计算，
+// 因此校验只需保证数值合理、频率不过分。
+const PROJ={nade:{gap:700},at:{gap:900},smoke:{gap:900}};
+function proj(w,m){
+ const r=rooms.get(w.room);
+ if(!r||!w.state?.alive||w.hp<=0)return;
+ const def=PROJ[String(m.k||'')];
+ if(!def)return;
+ const now=Date.now();
+ w.projAt=w.projAt||{};
+ if(now-(w.projAt[m.k]||0)<def.gap)return;
+ const x=num(m.x,-270,270),y=num(m.y,-20,180),z=num(m.z,-270,270);
+ const vx=num(m.vx,-60,60),vy=num(m.vy,-60,60),vz=num(m.vz,-60,60),f=num(m.f,0.2,12);
+ if([x,y,z,vx,vy,vz,f].includes(null))return;
+ if(Math.hypot(x-w.state.x,z-w.state.z)>6)return;      // 只能从自己手里扔出去
+ w.projAt[m.k]=now;
+ cast(r,{type:'proj',id:w.id,k:m.k,x,y,z,vx,vy,vz,f},w);
 }
 // 爆炸物（手雷/迫击炮/火箭筒/航弹/坦克炮弹）对真人的伤害。
 // 客户端只上报"哪种爆炸、炸在哪"，威力半径与衰减一律取服务端表。
@@ -395,6 +437,7 @@ function boom(w,m){
  // 客户端可以额外上报"目标被掩体挡住"，这只会让伤害变小，因此可以采信
  const blocked=new Set();
  if(Array.isArray(m.t))for(const it of m.t.slice(0,16))if(it&&it.b)blocked.add(String(it.id));
+ const terrain=terrainOf(w);
  for(const q of [...r]){
   // 自伤与 BOT 伤害仍由各客户端本地结算，服务端只裁定"别人打到的真人"
   if(q===w||!q.state?.alive||q.hp<=0)continue;
@@ -402,7 +445,13 @@ function boom(w,m){
   const d=Math.hypot(q.state.x-x,q.state.y+0.9-y,q.state.z-z);
   if(d>=def.r)continue;
   let dmg=def.linear?(1-d/def.r)*def.dmg:def.dmg+(10-def.dmg)*(d/def.r);
-  if(blocked.has(q.id))dmg*=0.25;                                 // 与客户端 explodeAt 的遮挡衰减一致
+  // 掩体或山体遮挡都按客户端 explodeAt 的同一衰减处理
+  let shielded=blocked.has(q.id);
+  if(!shielded&&d>1&&terrain){
+   const ix=(q.state.x-x)/d,iy=(q.state.y+0.9-y)/d,iz=(q.state.z-z)/d;
+   shielded=terrainBlocks(terrain,x,y,z,ix,iy,iz,d);
+  }
+  if(shielded)dmg*=0.25;
   if(dmg<=2)continue;
   const ev=hurt(w,q,dmg,false,r);
   if(ev)cast(r,ev);
@@ -466,6 +515,7 @@ function message(w,text){
   case 'state':return state(w,m.state||{});
   case 'shot':return shot(w,m);
   case 'boom':return boom(w,m);
+  case 'proj':return proj(w,m);
   // 原样回弹让客户端算往返延迟；客户端顺便上报上一次的测量值，仅用于记分板展示
   case 'latency':{
    if(Number.isFinite(+m.rtt))w.rtt=Math.max(0,Math.min(2000,Math.round(+m.rtt)));
