@@ -1,4 +1,6 @@
 'use strict';
+// 静态世界已经构建完毕，后面的战斗表现（后坐、弹道散布、粒子、BOT）恢复真随机
+restoreRandom();
 
 applyQuality();
 initMenuUI();
