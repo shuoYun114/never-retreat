@@ -116,6 +116,7 @@ begin(m){
  BOTS_PER_TEAM=SIZE_OPTS[SIZE_IDX].bots;tickets[0]=SIZE_OPTS[SIZE_IDX].tk;tickets[1]=SIZE_OPTS[SIZE_IDX].tk;
  (m.players||[]).forEach(p=>this.add(p));
  startMatch();MatchSettlement.start();
+ this.sendGeometry();
  el('menu').classList.add('hidden');showDeploy(true);
 },
 add(p){
@@ -154,6 +155,37 @@ damage(m){
 shoot(target,origin,dir,def,head){
  if(!def?.id)return;
  this.send({type:'shot',target:target.id,w:def.id,ox:origin.x,oy:origin.y,oz:origin.z,dx:dir.x,dy:dir.y,dz:dir.z});
+},
+// 把"永不会被摧毁"的碰撞盒打包给服务端做遮挡判定。
+// 可摧毁的墙不能进去：服务端拿不到摧毁信息，会把打穿破墙误判成穿墙。
+// 世界生成已按战役播种，所有客户端这份数据逐字节相同，所以摘要可以互相校验。
+solidGeometry(){
+ const destructible=new Set();
+ for(const g of (typeof DESTRUCTIBLES!=='undefined'?DESTRUCTIBLES:[]))
+  for(const i of (g.bi||[])) destructible.add(i);
+ const q=[];
+ for(let i=0;i<BOXES.length;i++){
+  if(destructible.has(i))continue;
+  const b=BOXES[i];
+  if(b.maxY-b.minY<=0.8)continue;                 // 太矮，挡不住人
+  q.push(b.minX,b.minY,b.minZ,b.maxX,b.maxY,b.maxZ);
+ }
+ const n=q.length/6;
+ const buf=new Uint8Array(n*12),view=new DataView(buf.buffer);
+ for(let i=0;i<q.length;i++)view.setInt16(i*2,Math.max(-32768,Math.min(32767,Math.round(q[i]*10))),true);
+ // FNV-1a，与服务端 fnv1a() 一致
+ let h=0x811c9dc5;
+ for(let i=0;i<buf.length;i++){h^=buf[i];h=Math.imul(h,0x01000193)>>>0;}
+ let bin='';
+ for(let i=0;i<buf.length;i++)bin+=String.fromCharCode(buf[i]);
+ return {n,d:btoa(bin),h:(h>>>0).toString(16).padStart(8,'0')};
+},
+sendGeometry(){
+ if(this.ws?.readyState!==1)return;
+ const g=(()=>{try{return this.solidGeometry()}catch(e){console.warn('几何打包失败',e);return null}})();
+ if(!g)return;
+ this.send({type:'geohash',h:g.h});              // 所有人都上报摘要
+ if(this.host)this.send({type:'geo',n:g.n,d:g.d});  // 只有房主传完整数据
 },
 // 上报投掷物弹道，让同房间的人能看见并躲开（伤害仍由服务端 boom 裁定）
 throwProjectile(kind,pos,vel,fuse){

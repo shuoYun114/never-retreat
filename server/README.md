@@ -50,8 +50,12 @@ In multiplayer none of the following trusts the client:
   `tools/gen_terrain.js`, matching the client's `heightAt()` point for point) and steps along the shot to
   reject fire through hills; blast damage through terrain is cut to a quarter. Tolerances are deliberately
   generous — a false block would break honest players' fire, which is worse than missing one cheater.
-  **Buildings are not checked**: walls are destructible and the server has no destruction feed, so static
-  building geometry would wrongly reject shots through blown-open walls.
+- **Building line of sight** — at match start the host uploads the *indestructible* collider boxes
+  (quantised to 0.1 m, ~18 KB) and every client uploads a digest of its own copy. World generation is
+  seeded per campaign, so all clients produce byte-identical geometry; the server only enables building
+  occlusion when every digest matches the uploaded data, and otherwise falls back to terrain-only and logs
+  the mismatch. Destructible walls are deliberately excluded — the server has no destruction feed, so
+  including them would wrongly reject shots through blown-open walls.
 - **Respawn** — full health is restored only after the death cooldown.
 - **Credits** — kill payouts, a per-victim repeat-kill cap, and match settlement minimum duration / daily cap.
 - **Rooms** — only lobby members enter a match; members who reload (campaign switch) or drop can rejoin

@@ -35,6 +35,10 @@ const MIN_RANKED_MS=120000;            // 对局至少打这么久，才登记�
 // 地形遮挡判定：沿射线步进比对地形高度。容差取得比较宽松，
 // 宁可漏判也不能误判——把老实玩家的正常射击判成穿墙比放过一个外挂更糟。
 const LOS_STEP=2,LOS_TOL=0.6,LOS_SKIP_NEAR=3;
+// 建筑遮挡：房主在开局时上传"永不会被摧毁"的碰撞盒（可摧毁的墙不参与，
+// 否则打穿已炸开的墙会被误判）。所有客户端另外上报同一份数据的摘要，
+// 只有全部摘要一致才启用——世界生成已按战役播种，各客户端几何本应逐字节相同。
+const GEO_MAX_BOXES=4000,GEO_MAX_B64=64000,GEO_SKIP_NEAR=1.2;
 const MSG_PER_SEC=90,PING_MS=25000,IDLE_MS=70000,SWEEP_MS=30000;
 const log=(...a)=>console.log(new Date().toISOString(),...a);
 
@@ -296,6 +300,7 @@ function startRoom(w){
  if(l.members.size<2)return send(w,{type:'room_error',error:'至少需要两名玩家'});
  if([...l.members].some(x=>!x.ready))return send(w,{type:'room_error',error:'还有成员未准备'});
  l.started=true;l.emptyAt=0;l.roster={};l.startedAt=Date.now();l.ended=false;
+ l.terrain=null;l.geo=null;                     // 换地图要重新收几何
  const combat=new Set();rooms.set(l.id,combat);
  // 房主必须先分配，保证"房主阵营"这个设置落在房主身上（重连过的房主在 Set 里不一定排第一）
  const order=[l.host,...[...l.members].filter(x=>x!==l.host)];
@@ -334,8 +339,70 @@ function terrainOf(w){
  if(!l.terrain)l.terrain=guard('terrain',()=>createTerrain(l.config.campaign))||null;
  return l.terrain;
 }
-// 射线是否被山体/地形挡住。只判地形：建筑可被炸毁，服务端没有摧毁信息，
-// 拿静态建筑做判定会把打穿破墙的正常射击误判成穿墙。
+// ---- 建筑遮挡 ----
+// FNV-1a，与客户端 33_network.js 的摘要算法一致
+function fnv1a(buf){
+ let h=0x811c9dc5;
+ for(let i=0;i<buf.length;i++){h^=buf[i];h=Math.imul(h,0x01000193)>>>0;}
+ return h.toString(16).padStart(8,'0');
+}
+// 房主上传几何：Int16 量化(0.1m) 的 [minX,minY,minZ,maxX,maxY,maxZ] × n，base64
+function geoUpload(w,m){
+ const l=lobbies.get(w.room);
+ if(!l||l.host!==w||!l.started)return;
+ if(l.geo&&l.geo.boxes)return;                                  // 一局只接受一次
+ const n=num(m.n,0,GEO_MAX_BOXES),b64=String(m.d||'');
+ if(n===null||!n||b64.length>GEO_MAX_B64)return;
+ const raw=guard('geo-decode',()=>Buffer.from(b64,'base64'));
+ if(!raw||raw.length!==n*12)return;                             // 6 个 int16 = 12 字节
+ const boxes=new Float64Array(n*6);
+ for(let i=0;i<n*6;i++)boxes[i]=raw.readInt16LE(i*2)/10;
+ l.geo=l.geo||{digests:new Map()};
+ l.geo.boxes=boxes;l.geo.n=n;l.geo.digest=fnv1a(raw);
+ log('几何上传',l.id,n+'个盒子',l.geo.digest);
+}
+// 各客户端上报自己那份几何的摘要，用于交叉校验房主有没有做手脚
+function geoDigest(w,m){
+ const l=lobbies.get(w.room);
+ if(!l||!l.started||!w.user)return;
+ l.geo=l.geo||{digests:new Map()};
+ l.geo.digests.set(w.user,String(m.h||'').slice(0,16));
+}
+// 只有拿到几何且所有上报的摘要都与之相符，才允许用建筑做遮挡判定
+function geoUsable(l){
+ const g=l&&l.geo;
+ if(!g||!g.boxes)return null;
+ if(g.ok===undefined||g.checked!==g.digests.size){
+  g.checked=g.digests.size;
+  g.ok=[...g.digests.values()].every(h=>h===g.digest);
+  if(!g.ok)log('!! 几何摘要不一致，本局仅按地形判定遮挡',l.id,g.digest,[...g.digests.values()].join(','));
+ }
+ return g.ok?g:null;
+}
+// 射线与 AABB 求交（slab 法），命中且在射程内即视为被建筑挡住
+function boxesBlock(g,ox,oy,oz,dx,dy,dz,dist){
+ if(!g)return false;
+ const far=dist-GEO_SKIP_NEAR,B=g.boxes;
+ if(far<=GEO_SKIP_NEAR)return false;
+ const ix=dx!==0?1/dx:Infinity,iy=dy!==0?1/dy:Infinity,iz=dz!==0?1/dz:Infinity;
+ for(let k=0;k<B.length;k+=6){
+  let t0=GEO_SKIP_NEAR,t1=far;
+  let a=(B[k]-ox)*ix,b=(B[k+3]-ox)*ix;
+  if(a>b){const s=a;a=b;b=s;}
+  if(a>t0)t0=a; if(b<t1)t1=b;
+  if(t0>t1)continue;
+  a=(B[k+1]-oy)*iy;b=(B[k+4]-oy)*iy;
+  if(a>b){const s=a;a=b;b=s;}
+  if(a>t0)t0=a; if(b<t1)t1=b;
+  if(t0>t1)continue;
+  a=(B[k+2]-oz)*iz;b=(B[k+5]-oz)*iz;
+  if(a>b){const s=a;a=b;b=s;}
+  if(a>t0)t0=a; if(b<t1)t1=b;
+  if(t0<=t1)return true;
+ }
+ return false;
+}
+// 射线是否被山体/地形挡住。
 function terrainBlocks(t,ox,oy,oz,dx,dy,dz,dist){
  if(!t)return false;
  for(let s=LOS_SKIP_NEAR;s<dist-LOS_SKIP_NEAR;s+=LOS_STEP){
@@ -393,6 +460,7 @@ function shot(w,m){
  const ex=vx-dx*t,ey=vy-dy*t,ez=vz-dz*t;
  if(ex*ex+ey*ey+ez*ez>HIT_RADIUS2)return;
  if(terrainBlocks(terrainOf(w),ox,oy,oz,dx,dy,dz,t))return;   // 隔着山头打不中
+ if(boxesBlock(geoUsable(lobbies.get(w.room)),ox,oy,oz,dx,dy,dz,t))return;   // 隔着不可摧毁的建筑打不中
  w.shotAt=now;
  // 爆头由服务端按几何判定，不采信客户端的 head 标记
  const head=Math.abs(oy+dy*t-(q.state.y+1.62))<HEAD_TOL;
@@ -437,7 +505,7 @@ function boom(w,m){
  // 客户端可以额外上报"目标被掩体挡住"，这只会让伤害变小，因此可以采信
  const blocked=new Set();
  if(Array.isArray(m.t))for(const it of m.t.slice(0,16))if(it&&it.b)blocked.add(String(it.id));
- const terrain=terrainOf(w);
+ const terrain=terrainOf(w),geo=geoUsable(lobbies.get(w.room));
  for(const q of [...r]){
   // 自伤与 BOT 伤害仍由各客户端本地结算，服务端只裁定"别人打到的真人"
   if(q===w||!q.state?.alive||q.hp<=0)continue;
@@ -447,9 +515,9 @@ function boom(w,m){
   let dmg=def.linear?(1-d/def.r)*def.dmg:def.dmg+(10-def.dmg)*(d/def.r);
   // 掩体或山体遮挡都按客户端 explodeAt 的同一衰减处理
   let shielded=blocked.has(q.id);
-  if(!shielded&&d>1&&terrain){
+  if(!shielded&&d>1){
    const ix=(q.state.x-x)/d,iy=(q.state.y+0.9-y)/d,iz=(q.state.z-z)/d;
-   shielded=terrainBlocks(terrain,x,y,z,ix,iy,iz,d);
+   shielded=terrainBlocks(terrain,x,y,z,ix,iy,iz,d)||boxesBlock(geo,x,y,z,ix,iy,iz,d);
   }
   if(shielded)dmg*=0.25;
   if(dmg<=2)continue;
@@ -516,6 +584,8 @@ function message(w,text){
   case 'shot':return shot(w,m);
   case 'boom':return boom(w,m);
   case 'proj':return proj(w,m);
+  case 'geo':return geoUpload(w,m);
+  case 'geohash':return geoDigest(w,m);
   // 原样回弹让客户端算往返延迟；客户端顺便上报上一次的测量值，仅用于记分板展示
   case 'latency':{
    if(Number.isFinite(+m.rtt))w.rtt=Math.max(0,Math.min(2000,Math.round(+m.rtt)));
