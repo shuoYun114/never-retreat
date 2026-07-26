@@ -2,8 +2,9 @@
 function addKillfeed(attacker,victim,isHead){
 const kf=el('killfeed');
 const div=document.createElement('div');
-const an=attacker.isPlayer?'<span class="me">你</span>':`<span class="kf${attacker.team}">${attacker.name}</span>`;
-const vn=victim.isPlayer?'<span class="me">你</span>':`<span class="kf${victim.team}">${victim.name}</span>`;
+// 名字可能来自网络（真人玩家），一律转义后再拼
+const an=attacker.isPlayer?'<span class="me">你</span>':`<span class="kf${attacker.team}">${esc(attacker.name)}</span>`;
+const vn=victim.isPlayer?'<span class="me">你</span>':`<span class="kf${victim.team}">${esc(victim.name)}</span>`;
 div.innerHTML=`${an} ${isHead?'☠':'✕'} ${vn}`;
 kf.prepend(div);
 while(kf.children.length>6) kf.lastChild.remove();
@@ -28,7 +29,9 @@ function onPlayerKill(victim,isHead,alreadyAwarded=false){
 if(!alreadyAwarded) player.score+=isHead?125:100;
 // 真人 PvP 的积分已由服务端结算；本地 BOT 模式暂不计入账号资产。
 player.lifeKills=(player.lifeKills||0)+1;
-showScorePop(isHead?'+125 爆头击杀':'+100 击杀');
+// 击杀真人时把对方名字带上（单人 BOT 模式维持原样）
+const vn=victim&&victim.net&&victim.name?' '+victim.name:'';
+showScorePop((isHead?'+125 爆头击杀':'+100 击杀')+vn);
 const hm=el('hitmark');
 hm.classList.add('kill');
 hm.style.opacity=1;

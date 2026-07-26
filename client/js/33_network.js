@@ -138,16 +138,28 @@ damage(m){
   const t=m.target===this.id?player.team:target?.team;
   if(t===0||t===1)tickets[t]=Math.max(0,tickets[t]-1);
  }
+ // 真人击杀要写进击杀播报，并让被杀的人知道是谁打的
+ if(m.killed){
+  const who=id=>id===this.id?{isPlayer:true,team:player.team,name:'你'}
+   :(this.peers.get(id)||{isPlayer:false,team:1-player.team,name:'士兵'});
+  addKillfeed(who(m.attacker),who(m.target),!!m.head);
+ }
  if(m.target===this.id){
   player.hp=m.hp;
-  if(m.killed){player.alive=false;player.deployed=false;showScorePop('你被敌军击杀');showDeploy(true);}
+  if(m.killed){
+   player.alive=false;player.deployed=false;
+   const killer=this.peers.get(m.attacker);
+   showScorePop((killer?`被 ${killer.name} `:'被敌军')+(m.head?'爆头击杀':'击杀'));
+   showDeploy(true);
+  }
   else{dmgFlash=Math.min(1,dmgFlash+.55);AudioSys.hurt();}
  }
  if(m.attacker===this.id){
   player.score=m.score;player.kills=m.kills;
   if(m.killed){
    if(Number.isFinite(m.credits))Account.sync({...(Account.account()||{}),credits:m.credits});
-   onPlayerKill({isPlayer:false},m.head,true);
+   const victim=this.peers.get(m.target);
+   onPlayerKill({isPlayer:false,net:true,name:victim?victim.name:'敌军'},m.head,true);
   }else{onPlayerHit({isPlayer:false},m.head);AudioSys.hitImpact(m.head);}
  }
 },
