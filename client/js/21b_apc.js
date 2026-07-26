@@ -340,7 +340,7 @@ attacker.score=(attacker.score||0)+200;
 addKillfeed(attacker,{name:this.name,team:this.team,isPlayer:false},false);
 if(attacker.isPlayer) showScorePop('+200 摧毁运兵车');
 }
-tickets[this.team]=Math.max(0,tickets[this.team]-3);
+if(ticketsLocal()) tickets[this.team]=Math.max(0,tickets[this.team]-3);
 explosionFX(this.pos.clone().add(V3(0,1.2,0)));
 AudioSys.explosion(this.pos.distanceTo(camera.position));
 this.grp.traverse(o=>{ if(o.isMesh){ if(!o.userData.mat0) o.userData.mat0=o.material; o.material=wreckMat; } });

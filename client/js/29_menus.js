@@ -105,17 +105,28 @@ catch(e){ el('acctState').textContent=e.message||'登录失败'; }
 };
 el('acctLogin').onclick=()=>accountAction(false);
 el('acctRegister').onclick=()=>accountAction(true);
-// 联机入口：双方仍保留当前本地战局，实时展示同房间真人位置与朝向。
-if(typeof NetPlay!=='undefined'){ NetPlay.init(); el('netRoom').value=NetPlay.room; el('netName').value=NetPlay.name; updateNetUI(); }
-el('netStartBtn').onclick=()=>{
-const room=(el('netRoom').value||'frontline').replace(/[^a-zA-Z0-9_-]/g,'').slice(0,24)||'frontline';
-const name=(el('netName').value||'士兵').trim().slice(0,16)||'士兵';
-localStorage.setItem('sf_room',room); localStorage.setItem('sf_name',name);
-NetPlay.room=room; NetPlay.name=name; NetPlay.connect();
-AudioSys.init(); player.team=SETTINGS.team;
-BOTS_PER_TEAM=SIZE_OPTS[SIZE_IDX].bots; tickets[0]=SIZE_OPTS[SIZE_IDX].tk; tickets[1]=SIZE_OPTS[SIZE_IDX].tk;
-startMatch(); MatchSettlement.start(); el('menu').classList.add('hidden'); showDeploy(true);
+// 房主制联机大厅
+if(typeof NetPlay!=='undefined'){
+NetPlay.init();
+const roomInput=el('netRoom'),roomName=el('netRoomName'),camp=el('netCampaign'),size=el('netSize'),hostTeam=el('netHostTeam'),hostHint=el('netHostTeamHint');
+roomInput.value=NetPlay.room;
+CAMPAIGNS.forEach((c,i)=>camp.add(new Option(c.title,i,i===CAMPAIGN_IDX,i===CAMPAIGN_IDX)));
+SIZE_OPTS.forEach((s,i)=>size.add(new Option(`${s.n} · 每方${s.bots}BOT · ${s.tk}票`,i,i===SIZE_IDX,i===SIZE_IDX)));
+const syncLobbyConfig=()=>{
+ const idx=Math.max(0,Math.min(CAMPAIGNS.length-1,Number(NetPlay.config?.campaign??camp.value) || 0)),c=CAMPAIGNS[idx],team=NetPlay.config?.hostTeam===1?1:0;
+ const sz=Math.max(0,Math.min(SIZE_OPTS.length-1,Number(NetPlay.config?.size??size.value) || 0));
+ camp.value=String(idx);size.value=String(sz);
+ hostTeam.textContent=`${FACTIONS[c.f[team]].sym} ${FACTIONS[c.f[team]].short}`;hostHint.textContent=`${FACTIONS[c.f[0]].short} vs ${FACTIONS[c.f[1]].short} · 房主可选攻/守方`;
+ camp.disabled=!NetPlay.host;size.disabled=!NetPlay.host;hostTeam.disabled=!NetPlay.host;roomName.disabled=!NetPlay.host;
+ if(NetPlay.host)roomName.value=NetPlay.config?.name||roomName.value;
 };
+NetPlay.onLobbyUpdate=syncLobbyConfig;
+syncLobbyConfig();
+hostTeam.onclick=()=>{const next=(NetPlay.config?.hostTeam===1?0:1);NetPlay.setConfig({hostTeam:next});};
+el('netCreateBtn').onclick=()=>NetPlay.create(roomName.value);el('netJoinBtn').onclick=()=>NetPlay.join(roomInput.value);el('netReadyBtn').onclick=()=>NetPlay.setReady();el('netLaunchBtn').onclick=()=>NetPlay.launch();
+el('netLeaveBtn').onclick=()=>NetPlay.leave();
+camp.onchange=()=>NetPlay.setConfig({campaign:+camp.value});size.onchange=()=>NetPlay.setConfig({size:+size.value});roomName.onchange=()=>NetPlay.setConfig({name:roomName.value});updateNetUI();
+}
 el('againBtn').onclick=()=>location.reload();
 const grid=el('classGrid');
 CLASSES.forEach((c,i)=>{
@@ -162,8 +173,10 @@ if(!owned)b.onclick=async()=>{try{await Progression.buy(item.id);AudioSys.click(
 }
 function renderBag(){
 const grid=el('bagGrid');if(!Account.ready()){grid.innerHTML='<div class="secLabel">先登录账号，才能管理背包。</div>';return;}grid.innerHTML='';
-CLASSES.forEach((c,cls)=>{const base=TEAM_FACTION[SETTINGS.team].cls[cls][0];const candidates=Object.entries(WPN_DEFS).filter(([id])=>Progression.owned(id)&&((id===base)||['springfield','kar98zf','stg44','bar','p38'].includes(id)));const selected=Progression.selected(cls,base);const wrap=document.createElement('div');wrap.className='optBtn';wrap.style.width='260px';wrap.innerHTML=`<b>${c.name}</b><br><select id="bagW${cls}">${candidates.map(([id,w])=>`<option value="${id}" ${id===selected?'selected':''}>${w.name}</option>`).join('')}</select><br><label><input type="checkbox" value="scope_4x">4×镜</label> <label><input type="checkbox" value="silencer">消音</label><br><label><input type="checkbox" value="extended_mag">扩容弹匣</label> <label><input type="checkbox" value="stock">稳定枪托</label><br><button class="bigBtn" style="margin-top:8px">保存配装</button>`;
-const old=Progression.attachments(cls);wrap.querySelectorAll('input').forEach(x=>{x.checked=old.includes(x.value);x.disabled=!Progression.owned(x.value)});wrap.querySelector('button').onclick=async()=>{const weapon=wrap.querySelector('select').value,ats=[...wrap.querySelectorAll('input:checked')].map(x=>x.value);try{await Account.equip(cls,weapon,ats);renderBag()}catch(e){alert(e.message)}};grid.appendChild(wrap);});
+const allowed=(id,cls,base)=>id===base||Progression.CATALOG.find(x=>x.id===id)?.classes?.includes(cls);
+CLASSES.forEach((c,cls)=>{const base=TEAM_FACTION[SETTINGS.team].cls[cls][0];const candidates=Object.entries(WPN_DEFS).filter(([id])=>Progression.owned(id)&&allowed(id,cls,base));if(!candidates.some(([id])=>id===base))candidates.unshift([base,WPN_DEFS[base]]);const wanted=Progression.selected(cls,base),selected=candidates.some(([id])=>id===wanted)?wanted:base;const wrap=document.createElement('div');wrap.className='optBtn';wrap.style.width='260px';wrap.innerHTML=`<b>${c.name}</b><br><select id="bagW${cls}">${candidates.map(([id,w])=>`<option value="${id}" ${id===selected?'selected':''}>${w.name}</option>`).join('')}</select><br><span class="bagAttachments"></span><br><button class="bigBtn" style="margin-top:8px">保存配装</button>`;
+const renderAttachments=()=>{const weapon=wrap.querySelector('select').value,old=Progression.attachments(cls),box=wrap.querySelector('.bagAttachments');box.innerHTML='';if(WPN_DEFS[weapon]?.scoped){const l=document.createElement('span');l.textContent='自带 4×镜';box.appendChild(l);box.append(' ');}[['scope_4x','4×镜'],['silencer','消音'],['extended_mag','扩容弹匣'],['stock','稳定枪托']].forEach(([id,label])=>{if(!attachmentFits(weapon,id,cls))return;const l=document.createElement('label');l.innerHTML=`<input type="checkbox" value="${id}">${label}`;const x=l.querySelector('input');x.checked=old.includes(id);x.disabled=!Progression.owned(id);box.appendChild(l);box.append(' ');});};
+wrap.querySelector('select').onchange=renderAttachments;renderAttachments();wrap.querySelector('button').onclick=async()=>{const weapon=wrap.querySelector('select').value,ats=[...wrap.querySelectorAll('input:checked')].map(x=>x.value);try{await Account.equip(cls,weapon,ats);renderBag()}catch(e){alert(e.message)}};grid.appendChild(wrap);});
 }
 function showDeploy(isDead){
 document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));

@@ -46,6 +46,8 @@ m38carb:  { name:'莫辛 M38 骑枪', mode:'栓动', type:'bolt', snd:'sniper', 
 type38c:  { name:'三八式骑枪', mode:'栓动', type:'bolt', snd:'sniper', dmg:58, headMul:2.2, rpm:50, mag:5, reserve:35, reload:3.3, spreadHip:5.2, spreadAds:0.22, recoil:2.0, recSide:0.45, adsFov:50, kick:0.09, boltT:1.1, model:'arisaka', tracer:1 },
 laotao:   { name:'老套筒(汉阳早期)', mode:'栓动', type:'bolt', snd:'sniper', dmg:54, headMul:2.1, rpm:44, mag:5, reserve:30, reload:3.7, spreadHip:5.8, spreadAds:0.3, recoil:2.2, recSide:0.55, adsFov:50, kick:0.1, boltT:1.25, model:'hanyang', tracer:1 },
 };
+// 每把枪带上自己的 id：联机开火时要告诉服务端用的是哪把枪，由服务端查表裁定伤害。
+Object.keys(WPN_DEFS).forEach(k=>{WPN_DEFS[k].id=k;});
 const CLASSES=[
 { name:'步枪兵', nades:2, smoke:1 },
 { name:'冲锋枪手', nades:3, smoke:1 },

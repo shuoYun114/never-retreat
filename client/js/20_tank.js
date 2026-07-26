@@ -659,7 +659,7 @@ firePlayerMG(dir){
 if(this.mgT>0) return;
 this.mgT=0.105;
 const o=this.coaxMuzzle();
-fireBullet(player,o,dir,{dmg:18,headMul:1.7,snd:'smg',tracer:2,vehDmg:2},o);
+fireBullet(player,o,dir,{id:'veh_mg',dmg:18,headMul:1.7,snd:'smg',tracer:2,vehDmg:2},o);
 AudioSys.gunshot('smg',0,0);
 addTrauma(0.02);
 }
@@ -697,7 +697,7 @@ attacker.score=(attacker.score||0)+300;
 addKillfeed(attacker,{name:this.name,team:this.team,isPlayer:false},false);
 if(attacker.isPlayer) showScorePop('+300 摧毁坦克');
 }
-tickets[this.team]=Math.max(0,tickets[this.team]-(this.def.heavy?6:5));
+if(ticketsLocal()) tickets[this.team]=Math.max(0,tickets[this.team]-(this.def.heavy?6:5));
 explosionFX(this.pos.clone().add(V3(0,1.4,0)));
 AudioSys.explosion(this.pos.distanceTo(camera.position));
 this.grp.traverse(o=>{ if(o.isMesh){ if(!o.userData.mat0) o.userData.mat0=o.material; o.material=wreckMat; } });

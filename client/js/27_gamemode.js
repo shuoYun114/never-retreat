@@ -46,7 +46,7 @@ if(GAMEMODE==='assault'&&attacker===ATK&&f.owner===attacker){
 const allTaken=FLAGS.every(x=>x.owner===ATK);
 if(allTaken){ endMatch(ATK); return; }
 addKillMsg('据点 '+f.id+' 已占领，可继续进攻任意据点',ATK);
-tickets[ATK]=Math.min(tickets[ATK]+40,999);
+if(ticketsLocal()) tickets[ATK]=Math.min(tickets[ATK]+40,999);
 }
 }
 }
@@ -67,18 +67,18 @@ for(const d of DEPOTS){
 if(!d.destroyed&&d.g&&d.g.dead){
 d.destroyed=true;
 addKillMsg('补给库 '+d.id+' 被摧毁!',ATK);
-tickets[ATK]=Math.min(tickets[ATK]+35,999);
+if(ticketsLocal()) tickets[ATK]=Math.min(tickets[ATK]+35,999);
 }
 if(!d.destroyed) left++;
 }
 if(left===0){ endMatch(ATK); return; }
 }
-if(GAMEMODE==='conquest'){
+if(GAMEMODE==='conquest'&&ticketsLocal()){
 const d=owned[0]-owned[1];
 if(d>0) tickets[1]=Math.max(0,tickets[1]-dt*d*0.10);
 else if(d<0) tickets[0]=Math.max(0,tickets[0]-dt*(-d)*0.10);
 }
-matchTime-=dt;
+if(ticketsLocal()) matchTime-=dt;
 if(tickets[0]<=0||tickets[1]<=0||matchTime<=0){
 endMatch();
 }
@@ -88,6 +88,8 @@ function endMatch(forceWinner){
 matchOver=true;
 MatchSettlement.end('complete').catch(e=>console.warn('自动结算失败',e));
 const winner=forceWinner!==undefined?forceWinner:(tickets[0]===tickets[1]?-1:(tickets[0]>tickets[1]?0:1));
+// 房主宣布结果，保证同一局所有人同时结束
+if(typeof NetPlay!=='undefined'&&NetPlay.started&&NetPlay.host) NetPlay.send({type:'match_over',winner});
 document.exitPointerLock&&document.exitPointerLock();
 setTimeout(()=>{
 document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));

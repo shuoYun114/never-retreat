@@ -1,7 +1,4 @@
 'use strict';
-function updateTargetBoxes(){
-const layer=document.getElementById('targetBoxes');if(layer)layer.innerHTML='';
-}
 function loop(){
 requestAnimationFrame(loop);
 if(document.hidden) return;
@@ -89,7 +86,6 @@ camera.updateProjectionMatrix();
 player.mouseDX*=Math.pow(0.0001,dt*3);
 player.mouseDY*=Math.pow(0.0001,dt*3);
 updateHUD(dt);
- updateTargetBoxes();
  renderer.clear();
 renderer.render(scene,camera);
 if(player.alive&&!player.onMG&&VM.root.visible){

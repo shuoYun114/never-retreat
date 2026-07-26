@@ -38,7 +38,7 @@ die(attacker,isHead){
 this.alive=false;
 this.deaths++;
 this.deathT=nowT;
-tickets[this.team]=Math.max(0,tickets[this.team]-1);
+if(ticketsLocal()) tickets[this.team]=Math.max(0,tickets[this.team]-1);
 this.killerName=attacker?(attacker.name||'敌军'):'';
 if(attacker&&attacker!==this){ attacker.kills=(attacker.kills||0)+1; attacker.score=(attacker.score||0)+100; addKillfeed(attacker,this,false); }
 if(this.onMG){ this.onMG.user=null; this.onMG=null; }

@@ -584,7 +584,7 @@ addTrauma(0.06);
 AudioSys.gunshot('mg',0,0);
 const o=V3(mg.x,mg.y+0.12,mg.z);
 const muzz=o.clone().addScaledVector(dir,1.35);
-fireBullet(p,o,dir,{dmg:mdef.dmg,headMul:1.9,snd:'mg',tracer:2,vehDmg:2.5},muzz);
+fireBullet(p,o,dir,{id:'emp_mg_'+CAMPAIGN.f[mg.team],dmg:mdef.dmg,headMul:1.9,snd:'mg',tracer:2,vehDmg:2.5},muzz);
 muzzleFXWorld(muzz,dir);
 }
 document.getElementById('heatFill').style.width=(mg.heat*100)+'%';
@@ -692,7 +692,7 @@ function updatePlayerBody(dt){
 const m=player.mesh;
 if(!m) return;
 const hide=!player.alive||!player.deployed||player.onVehicle||player.chute
-||player.onMG||player.onAT||player.onAA||player.onMortar;
+||player.onMG||player.onAT||player.onAA||player.onMortar||player.prone;
 if(m.root.visible===hide) m.root.visible=!hide;
 if(hide) return;
 // 第一人称: 头/手臂/背枪隐藏(视模已有手), 只显示躯干与腿

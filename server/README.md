@@ -1,12 +1,71 @@
-# Steel Front dedicated server
+# Never Retreat dedicated server
 
-Deploy this `server/` directory to a Linux VPS with Node.js 18+.
+Deploy this `server/` directory to a machine with Node.js 18+:
 
 ```bash
 cd server
 PORT=18080 node server.js
 ```
 
-Persistent account data is stored in `data/accounts.json`. Back it up regularly; it contains password hashes and account credits.
+The server only handles accounts, the room lobby and combat adjudication — it does not serve the
+game page. The client is served separately from `client/` (default 18081).
 
-The game client must be hosted separately and configured with this server's HTTP/WebSocket address.
+## Environment variables
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PORT` | `18080` | Listen port (HTTP API and WebSocket share it) |
+| `HOST` | `0.0.0.0` | Listen address |
+| `DATA_FILE` | `data/accounts.json` | Save file path |
+| `ALLOW_ORIGIN` | `*` | CORS origin; must allow the client origin when they differ |
+
+Health check: `GET /api/health` → `{"ok":true,...}`
+
+## Save file
+
+Accounts, password hashes, credits, loadouts and sessions all live in `data/accounts.json` — back it up.
+If the file cannot be parsed the server will **not** overwrite it with an empty save: it copies it to
+`accounts.json.broken-<timestamp>`, logs loudly, and starts with an empty save.
+
+Session tokens are stored as sha256 hashes only, so auto-login survives a server restart. They expire
+after 30 days.
+
+## What the server adjudicates
+
+In multiplayer none of the following trusts the client:
+
+- **Damage and headshots** — the client only reports *which weapon* (weapon id) and *from where to where*.
+  Damage comes from the server weapon table; headshots are decided geometrically by the server.
+- **Rate of fire** — minimum interval per shot derived from each weapon's rpm.
+- **Weapon legality** — whether that account and that class may use that weapon (class-issued table + purchases).
+- **Hit validation** — ray-to-capsule distance, range cap, and the muzzle position must be close to the
+  shooter's own reported position.
+- **Respawn** — full health is restored only after the death cooldown.
+- **Credits** — kill payouts, a per-victim repeat-kill cap, and match settlement minimum duration / daily cap.
+- **Rooms** — only lobby members enter a match; members who reload (campaign switch) or drop can rejoin
+  within a grace period.
+
+Tickets and the match result are broadcast by the **host**; other clients no longer each run their own
+tally. Bots and vehicles are still simulated locally per client (their positions are not synced).
+
+## Weapon data table
+
+`lib/weapon_meta.js` and `client/js/13c_attach_rules.js` are both generated. After changing client weapon
+stats, regenerate:
+
+```bash
+npm run gen
+```
+
+It extracts stats from `client/js/13_weapons_data.js` (hand weapons), `08_world.js` (MG emplacements) and
+`01_data.js` (aircraft MGs), and writes one shared attachment-compatibility rule to both the server and the
+client so the two can never disagree.
+
+## Tests
+
+```bash
+npm test
+```
+
+Unit tests cover account assets, sessions and settlement rules. The integration test spawns a real server
+process and covers damage adjudication, rate of fire, respawn, room access control, rejoin and flood protection.

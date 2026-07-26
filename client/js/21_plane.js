@@ -110,7 +110,7 @@ const dir=this.fwdDir();
 const sp=0.05*spreadMul;
 dir.x+=rand(-sp,sp); dir.y+=rand(-sp,sp)*0.8; dir.z+=rand(-sp,sp); dir.normalize();
 const o=this.pos.clone().addScaledVector(dir,2.4);
-fireBullet(shooter,o,dir,{dmg:this.def.mgDmg,headMul:1.5,snd:'smg',tracer:1},o);
+fireBullet(shooter,o,dir,{id:`plane_mg_${CAMPAIGN.f[this.team]}_${this.variant}`,dmg:this.def.mgDmg,headMul:1.5,snd:'smg',tracer:1},o);
 for(const ep of planes){
 if(!ep.alive||ep.team===this.team) continue;
 const rel=ep.pos.clone().sub(o); const tp=rel.dot(dir);
@@ -386,7 +386,7 @@ attacker.score=(attacker.score||0)+250;
 addKillfeed(attacker,{name:this.name,team:this.team,isPlayer:false},false);
 if(attacker.isPlayer) showScorePop('+250 击落战机');
 }
-tickets[this.team]=Math.max(0,tickets[this.team]-3);
+if(ticketsLocal()) tickets[this.team]=Math.max(0,tickets[this.team]-3);
 explosionFX(this.pos.clone());
 AudioSys.explosion(this.pos.distanceTo(camera.position));
 // 坠机残骸: 拖着火焰继续坠落, 落地爆炸并留下焦黑残骸

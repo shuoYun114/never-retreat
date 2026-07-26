@@ -192,7 +192,7 @@ if(this.onVehicle){ if(this.onVehicle.crewBot===this) this.onVehicle.crewBot=nul
 if(this.mgUse){ this.mgUse.user=null; this.mgUse=null; }
 if(this.empUse){ this.empUse.user=null; this.empUse=null; }
 if(this.mortUse){ this.mortUse.user=null; this.mortUse=null; }
-tickets[this.team]=Math.max(0,tickets[this.team]-1);
+if(ticketsLocal()) tickets[this.team]=Math.max(0,tickets[this.team]-1);
 if(attacker){
 attacker.kills=(attacker.kills||0)+1;
 attacker.score=(attacker.score||0)+100;

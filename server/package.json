@@ -1,7 +1,11 @@
 {
   "name": "steel-front-server",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "private": true,
-  "scripts": {"start": "node server.js"},
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/account-assets.test.js test/match-settlement.test.js test/combat-authority.test.js test/lobby-sync.test.js",
+    "gen": "node tools/gen_weapon_meta.js"
+  },
   "engines": {"node": ">=18"}
 }

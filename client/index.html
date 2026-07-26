@@ -98,15 +98,20 @@
 <h2 class="mSubTitle">账 号 登 录</h2>
 <div class="sliderRow">账号 <input id="acctUser" maxlength="16" placeholder="3-16位账号"></div>
 <div class="sliderRow">密码 <input id="acctPass" type="password" minlength="6" placeholder="至少6位密码"></div>
+<div class="sliderRow"><label><input id="acctAutoLogin" type="checkbox" checked> 自动登录（仅本机）</label><span class="val">不会保存密码</span></div>
 <div id="acctState" class="secLabel">登录后战功积分将绑定账号</div>
 <div class="center" style="margin-top:22px"><button class="bigBtn" id="acctLogin">登 录</button><button class="bigBtn" id="acctRegister">注 册</button><button class="bigBtn backBtn">返 回</button></div>
 </div>
 <div id="mNet" class="mSub hidden">
-<h2 class="mSubTitle">联 机 对 战</h2>
-<div class="secLabel">房间与昵称</div>
-<div class="sliderRow">房间 <input id="netRoom" maxlength="24" value="frontline"><span class="val">同房间才能看到彼此</span></div>
-<div class="sliderRow">昵称 <input id="netName" maxlength="16" value="士兵"><span class="val" id="netState">联机：未连接</span></div>
-<div class="center" style="margin-top:22px"><button class="bigBtn" id="netStartBtn">连接并进入战场</button><button class="bigBtn backBtn">返 回</button></div>
+<h2 class="mSubTitle">联机房间</h2>
+<div class="secLabel" id="netState">先登录，再创建或加入房间</div>
+<div class="sliderRow">房间名称 <input id="netRoomName" maxlength="16" placeholder="创建时填写，例如：晚间淞沪局"><span class="val" id="netName"></span></div>
+<div class="sliderRow">加入代码 <input id="netRoom" inputmode="numeric" maxlength="6" placeholder="输入 6 位代码加入"></div>
+<div class="sliderRow">战役 <select id="netCampaign"></select><span class="val">仅房主可修改</span></div>
+<div class="sliderRow">规模 <select id="netSize"></select><span class="val">房主统一 BOT 数与兵力票</span></div>
+<div class="sliderRow">房主阵营 <button class="optBtn" id="netHostTeam">—</button><span class="val" id="netHostTeamHint">房主可选择攻/守阵营</span></div>
+<div class="secLabel" id="netMembers">成员：—</div>
+<div class="center" style="margin-top:22px"><button class="bigBtn" id="netCreateBtn">创 建 房 间</button><button class="bigBtn" id="netJoinBtn">加 入 房 间</button><button class="bigBtn" id="netReadyBtn">准 备</button><button class="bigBtn" id="netLaunchBtn">房 主 开 始</button><button class="bigBtn" id="netLeaveBtn">退 出 房 间</button><button class="bigBtn backBtn">返 回</button></div>
 </div>
 <div id="mPlay" class="mSub hidden">
 <h2 class="mSubTitle">开 始 游 戏</h2>
@@ -218,6 +223,7 @@
 <script src="js/11_particles.js"></script>
 <script src="js/12_weather_fx.js"></script>
 <script src="js/13_weapons_data.js"></script>
+<script src="js/13c_attach_rules.js"></script>
 <script src="js/14_gunmodels.js"></script>
 <script src="js/15_viewmodel.js"></script>
 <script src="js/16_soldier.js"></script>
@@ -234,10 +240,10 @@
 <script src="js/26_camera.js"></script>
 <script src="js/27_gamemode.js"></script>
 <script src="js/28_hud.js"></script>
+<script src="js/33_network.js"></script>
 <script src="js/29_menus.js"></script>
 <script src="js/30_main.js"></script>
 <script src="js/31_touch.js"></script>
-<script src="js/33_network.js"></script>
 <script src="js/34_progression.js"></script>
 <script src="js/35_server_config.js"></script>
 <script src="js/36_account.js"></script>

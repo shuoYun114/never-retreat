@@ -1,6 +1,21 @@
-# 运行时账户数据（密码哈希、玩家资产）
+# 运行时账户数据（密码哈希、会话、玩家资产）
 server/data/accounts.json
 server/data/*.tmp
+server/data/*.broken-*
+
+# 仓库根目录遗留的旧版单体副本（正式代码在 client/ 与 server/ 里）
+/index.html
+/server.js
+/js/
+/css/
+/vendor/
+/_reg.html
+/_dev/
+
+# 桌面壳编译产物
+desktop-client/dist/
+desktop-client/bin/
+desktop-client/obj/
 
 # NAS / 本地运行日志与进程文件
 server/log/
@@ -19,6 +34,12 @@ backups/
 # Python / Node 依赖缓存
 __pycache__/
 node_modules/
+
+# code-review-graph 生成的代码图数据库
+.code-review-graph/
+
+# 本机工具配置（含绝对路径，对别人无效）
+.mcp.json
 
 # OS / 编辑器
 .DS_Store
