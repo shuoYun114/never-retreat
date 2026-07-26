@@ -18,6 +18,19 @@ const LOBBY_GRACE_MS=120000;           // 开局后掉线/切战役重载的重�
 const HIT_RADIUS2=0.85;                // 命中判据半径²(≈0.92m)，比客户端 0.69m 略松以吸收延迟
 const HEAD_TOL=0.4,ORIGIN_TOL=4,ORIGIN_TOL_VEH=14,MAX_RANGE=200;
 const KILL_CREDIT=100,HEADSHOT_CREDIT=125,MAX_CREDITED_PER_VICTIM=10;
+// 爆炸物威力表：数值与客户端 18_ballistics.js / 20_tank.js 的爆炸调用一一对应。
+// linear=true 用 (1-d/r)*dmg（手雷），否则用 dmg→10 的线性插值（溅射）。
+// maxRange 是落点相对开火者的最大距离，gap 是该类爆炸物的最小间隔(ms)。
+const EXPLOSION={
+ nade:    {r:9,  dmg:135,linear:true, maxRange:80, gap:1200},
+ nade_top:{r:4,  dmg:80,               maxRange:80, gap:1200},
+ mortar:  {r:7.5,dmg:135,              maxRange:270,gap:1500},
+ at:      {r:5,  dmg:95,               maxRange:220,gap:1000,cls:5},
+ bomb:    {r:9.5,dmg:170,              maxRange:240,gap:1200},
+ shell:   {r:5,  dmg:95,               maxRange:270,gap:2200},
+ shell_at:{r:5,  dmg:70,               maxRange:270,gap:2200}
+};
+const MIN_RANKED_MS=120000;            // 对局至少打这么久，才登记场次与胜负
 const MSG_PER_SEC=90,PING_MS=25000,IDLE_MS=70000,SWEEP_MS=30000;
 const log=(...a)=>console.log(new Date().toISOString(),...a);
 
@@ -173,7 +186,7 @@ function rateOk(w){
  return ++w.winN<=MSG_PER_SEC;
 }
 
-function pub(w){return{id:w.id,name:w.user,team:w.team,state:w.state,hp:w.hp,score:w.score,kills:w.kills,deaths:w.deaths,ready:!!w.ready}}
+function pub(w){return{id:w.id,name:w.user,team:w.team,state:w.state,hp:w.hp,score:w.score,kills:w.kills,deaths:w.deaths,ready:!!w.ready,ping:w.rtt||0}}
 function blankState(){return{x:0,y:0,z:0,yaw:0,pitch:0,alive:false,deployed:false,cls:0}}
 function resetCombat(w,team){w.team=team;w.hp=100;w.score=0;w.kills=0;w.deaths=0;w.deadAt=0;w.shotAt=0;w.credited=new Map();w.state=blankState();}
 
@@ -278,7 +291,7 @@ function startRoom(w){
  if(!l||l.host!==w||l.started)return;
  if(l.members.size<2)return send(w,{type:'room_error',error:'至少需要两名玩家'});
  if([...l.members].some(x=>!x.ready))return send(w,{type:'room_error',error:'还有成员未准备'});
- l.started=true;l.emptyAt=0;l.roster={};
+ l.started=true;l.emptyAt=0;l.roster={};l.startedAt=Date.now();l.ended=false;
  const combat=new Set();rooms.set(l.id,combat);
  // 房主必须先分配，保证"房主阵营"这个设置落在房主身上（重连过的房主在 Set 里不一定排第一）
  const order=[l.host,...[...l.members].filter(x=>x!==l.host)];
@@ -310,6 +323,31 @@ function state(w,s){
  w.state={x,y,z,yaw,pitch,alive:!!s.alive&&w.hp>0,deployed:!!s.deployed,cls:Math.max(0,Math.min(7,+s.cls||0))};
  cast(rooms.get(w.room),{type:'state',id:w.id,state:w.state,hp:w.hp},w);
 }
+// 扣血 / 击杀 / 发功：子弹与爆炸共用同一套记账，返回要广播的事件
+function hurt(w,q,dmg,head,r){
+ if(!(dmg>0))return null;
+ const now=Date.now();
+ // 保留一位小数，避免浮点噪声（0.1 的血量差不影响击杀判定）被广播到血条上
+ q.hp=Math.max(0,Math.round((q.hp-dmg)*10)/10);
+ const killed=q.hp===0;
+ let credits=null;
+ if(killed){
+  q.state.alive=false;q.deadAt=now;q.deaths++;w.kills++;
+  const gain=head?HEADSHOT_CREDIT:KILL_CREDIT;
+  w.score+=gain;
+  // 同一个受害者反复送人头只计前 N 次，堵住两号对刷
+  const n=w.credited.get(q.user)||0;
+  if(n<MAX_CREDITED_PER_VICTIM&&q.user!==w.user){
+   w.credited.set(q.user,n+1);
+   guard('award',()=>{store.award(w.user,gain);markDirty();});
+  }
+  credits=safeAccount(w.user)?.credits??0;
+  // 真人对战的累计战绩由服务端记账，不采信客户端上报
+  guard('stats',()=>{store.bumpStats(w.user,{kills:1});store.bumpStats(q.user,{deaths:1});markDirty();});
+  syncRoster(w);syncRoster(q);
+ }
+ return {type:'damage',attacker:w.id,target:q.id,hp:q.hp,killed,head,score:w.score,kills:w.kills,deaths:q.deaths,credits};
+}
 function shot(w,m){
  const r=rooms.get(w.room);
  if(!r||!w.state?.alive||w.hp<=0)return;
@@ -335,23 +373,40 @@ function shot(w,m){
  // 爆头由服务端按几何判定，不采信客户端的 head 标记
  const head=Math.abs(oy+dy*t-(q.state.y+1.62))<HEAD_TOL;
  const mul=meta.vehicle?1:attachDamageMul(w.user,w.state.cls);
- q.hp=Math.max(0,q.hp-meta.dmg*(head?meta.headMul:1)*mul);
- const killed=q.hp===0;
- let credits=null;
- if(killed){
-  q.state.alive=false;q.deadAt=now;q.deaths++;w.kills++;
-  const gain=head?HEADSHOT_CREDIT:KILL_CREDIT;
-  w.score+=gain;
-  // 同一个受害者反复送人头只计前 N 次，堵住两号对刷
-  const n=w.credited.get(q.user)||0;
-  if(n<MAX_CREDITED_PER_VICTIM&&q.user!==w.user){
-   w.credited.set(q.user,n+1);
-   guard('award',()=>{store.award(w.user,gain);markDirty();});
-  }
-  credits=safeAccount(w.user)?.credits??0;
-  syncRoster(w);syncRoster(q);
+ const ev=hurt(w,q,meta.dmg*(head?meta.headMul:1)*mul,head,r);
+ if(ev)cast(r,ev);
+}
+// 爆炸物（手雷/迫击炮/火箭筒/航弹/坦克炮弹）对真人的伤害。
+// 客户端只上报"哪种爆炸、炸在哪"，威力半径与衰减一律取服务端表。
+function boom(w,m){
+ const r=rooms.get(w.room);
+ if(!r||!w.state?.alive||w.hp<=0)return;
+ const def=EXPLOSION[String(m.k||'')];
+ if(!def)return;
+ const now=Date.now();
+ w.boomAt=w.boomAt||{};
+ if(now-(w.boomAt[m.k]||0)<def.gap)return;                       // 每类爆炸物独立冷却
+ if(def.cls!==undefined&&w.state.cls!==def.cls)return;           // 例如火箭筒只有反坦克兵能用
+ const x=num(m.x,-270,270),y=num(m.y,-20,180),z=num(m.z,-270,270);
+ if([x,y,z].includes(null))return;
+ // 落点不能离本人太远：手雷是投掷距离，炮弹/航弹则放宽到射程
+ if(Math.hypot(x-w.state.x,z-w.state.z)>def.maxRange)return;
+ w.boomAt[m.k]=now;
+ // 客户端可以额外上报"目标被掩体挡住"，这只会让伤害变小，因此可以采信
+ const blocked=new Set();
+ if(Array.isArray(m.t))for(const it of m.t.slice(0,16))if(it&&it.b)blocked.add(String(it.id));
+ for(const q of [...r]){
+  // 自伤与 BOT 伤害仍由各客户端本地结算，服务端只裁定"别人打到的真人"
+  if(q===w||!q.state?.alive||q.hp<=0)continue;
+  if(q.team===w.team)continue;                                    // 不误伤队友
+  const d=Math.hypot(q.state.x-x,q.state.y+0.9-y,q.state.z-z);
+  if(d>=def.r)continue;
+  let dmg=def.linear?(1-d/def.r)*def.dmg:def.dmg+(10-def.dmg)*(d/def.r);
+  if(blocked.has(q.id))dmg*=0.25;                                 // 与客户端 explodeAt 的遮挡衰减一致
+  if(dmg<=2)continue;
+  const ev=hurt(w,q,dmg,false,r);
+  if(ev)cast(r,ev);
  }
- cast(r,{type:'damage',attacker:w.id,target:q.id,hp:q.hp,killed,head,score:w.score,kills:w.kills,deaths:q.deaths,credits});
 }
 // 票数/比分以房主为准广播，避免各客户端本地各算一套越算越偏
 function ticketSync(w,m){
@@ -364,11 +419,38 @@ function ticketSync(w,m){
  if(!ok(t[0])||!ok(t[1]))return;
  cast(rooms.get(w.room),{type:'tickets',t:[t[0]===null?null:+t[0],t[1]===null?null:+t[1]],time:num(m.time,0,99999)},w);
 }
+// 聊天：大厅和局内通用，team=true 只发给同阵营。文本只做长度与控制字符清理，
+// 渲染由客户端用 textContent 完成，不存在注入问题。
+function chat(w,m){
+ const now=Date.now();
+ if(now-(w.chatAt||0)<800)return;                     // 防刷屏
+ const text=String(m.text||'').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,120);
+ if(!text)return;
+ const room=rooms.get(w.room),lobby=lobbies.get(w.lobby);
+ const targets=room||lobby?.members;
+ if(!targets)return;
+ w.chatAt=now;
+ const team=!!m.team&&!!room;                          // 大厅还没分阵营，一律当全局
+ const out={type:'chat',from:w.user,team,txt:text,mine:false};
+ for(const x of targets){
+  if(team&&x.team!==w.team)continue;
+  send(x,{...out,mine:x===w});
+ }
+}
 function matchOver(w,m){
  const l=lobbies.get(w.room);
- if(!l||l.host!==w)return;
+ if(!l||l.host!==w||l.ended)return;
  const winner=m.winner===0||m.winner===1?m.winner:-1;
+ l.ended=true;
  cast(rooms.get(w.room),{type:'match_over',winner},w);
+ // 场次与胜负只在够长的对局里登记，免得开局即宣布结束来刷战绩
+ if(Date.now()-(l.startedAt||0)<MIN_RANKED_MS)return;
+ for(const x of rooms.get(w.room)||[]){
+  if(!x.user)continue;
+  guard('stats',()=>store.bumpStats(x.user,
+   winner<0?{matches:1}:(x.team===winner?{matches:1,wins:1}:{matches:1,losses:1})));
+ }
+ markDirty();
 }
 function message(w,text){
  let m;
@@ -383,6 +465,13 @@ function message(w,text){
   case 'leave_room':return void(leaveCombat(w),leaveLobby(w));
   case 'state':return state(w,m.state||{});
   case 'shot':return shot(w,m);
+  case 'boom':return boom(w,m);
+  // 原样回弹让客户端算往返延迟；客户端顺便上报上一次的测量值，仅用于记分板展示
+  case 'latency':{
+   if(Number.isFinite(+m.rtt))w.rtt=Math.max(0,Math.min(2000,Math.round(+m.rtt)));
+   return send(w,{type:'latency',t:m.t});
+  }
+  case 'chat':return chat(w,m);
   case 'tickets':return ticketSync(w,m);
   case 'match_over':return matchOver(w,m);
  }
@@ -438,6 +527,15 @@ setInterval(()=>{
   guard('ping',()=>{if(w.writable&&!w.destroyed)w.write(frame(Buffer.alloc(0),9))});
  }
 },PING_MS);
+// 每 5 秒把房间里各人的延迟同步一次，供记分板展示
+setInterval(()=>{
+ for(const r of rooms.values()){
+  if(r.size<2)continue;
+  const p={};
+  for(const w of r)p[w.id]=w.rtt||0;
+  cast(r,{type:'pings',p});
+ }
+},5000);
 // 清理：过期会话、限速表、超过宽限期的空房间
 setInterval(()=>{
  const now=Date.now();

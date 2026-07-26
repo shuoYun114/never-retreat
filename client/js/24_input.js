@@ -135,6 +135,18 @@ showScorePop('建造选择: '+bn+' (消耗'+BUILD_COST[bt]+'点'+(MOBILE?'':' ·
 },
 };
 addEventListener('keydown',e=>{
+// 聊天输入框打开时，键盘完全交给它，不再触发任何游戏操作
+if(typeof chatOpen==='function'&&chatOpen()){
+ if(e.code==='Escape'){e.preventDefault();closeChat();}
+ else if(e.code==='Enter'||e.code==='NumpadEnter'){e.preventDefault();sendChat();}
+ return;
+}
+if((e.code==='Enter'||e.code==='NumpadEnter')&&typeof NetPlay!=='undefined'&&NetPlay.started){
+ e.preventDefault();openChat(false);return;
+}
+if(e.code==='KeyU'&&typeof NetPlay!=='undefined'&&NetPlay.started&&!e.repeat){
+ e.preventDefault();openChat(true);return;
+}
 if(e.code==='Escape'&&player.deployed&&!matchOver){
  e.preventDefault();document.exitPointerLock&&document.exitPointerLock();document.getElementById('pause').classList.remove('hidden');
 }

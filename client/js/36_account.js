@@ -13,7 +13,23 @@ const base=()=>{
 function headers(){return {'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})};}
 async function request(path,data){const r=await fetch(base()+path,{method:'POST',headers:headers(),body:JSON.stringify(data||{})});const j=await r.json().catch(()=>({}));if(!r.ok){if(r.status===401)clear();throw Error(j.error||'请求失败')}return j;}
 function sync(a){current=a||current;syncUI();return current}
-function syncUI(){const c=current?.isAdmin?'∞':(current?.credits||0);const e=document.getElementById('accountCredits');if(e)e.textContent=c;const s=document.getElementById('acctState');if(s&&current)s.textContent=`已登录：${current.username}${current.isAdmin?' · 管理员':''} · 战功 ${c}`;}
+function syncUI(){
+ const c=current?.isAdmin?'∞':(current?.credits||0);
+ const e=document.getElementById('accountCredits');if(e)e.textContent=c;
+ const s=document.getElementById('acctState');
+ if(s&&current)s.textContent=`已登录：${current.username}${current.isAdmin?' · 管理员':''} · 战功 ${c}`;
+ // 真人对战累计战绩（服务端记账）
+ const box=document.getElementById('acctStats');
+ if(box){
+  const t=current?.stats;
+  if(!t)box.textContent='真人对战战绩：登录后显示';
+  else{
+   const kd=t.deaths?(t.kills/t.deaths).toFixed(2):(t.kills?'∞':'0.00');
+   const wr=t.matches?Math.round(t.wins/t.matches*100):0;
+   box.textContent=`真人对战：${t.matches} 场 · ${t.wins} 胜 ${t.losses} 负（胜率 ${wr}%） · ${t.kills} 击杀 / ${t.deaths} 阵亡 · K/D ${kd}`;
+  }
+ }
+}
 function autoEnabled(){try{return localStorage.getItem(STORE_AUTO)!=='0'}catch{return true}}
 function setAuto(enabled){try{localStorage.setItem(STORE_AUTO,enabled?'1':'0');if(!enabled)localStorage.removeItem(STORE_TOKEN)}catch{}}
 function set(j){token=j.token||token;try{if(token&&autoEnabled())localStorage.setItem(STORE_TOKEN,token)}catch{}return sync(j.account)}

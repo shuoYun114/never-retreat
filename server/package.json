@@ -4,8 +4,10 @@
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/account-assets.test.js test/match-settlement.test.js test/combat-authority.test.js test/lobby-sync.test.js",
+    "test": "node --test test/account-assets.test.js test/match-settlement.test.js test/combat-authority.test.js test/lobby-sync.test.js test/explosion-damage.test.js test/chat-and-stats.test.js",
     "gen": "node tools/gen_weapon_meta.js"
   },
-  "engines": {"node": ">=18"}
+  "engines": {
+    "node": ">=18"
+  }
 }

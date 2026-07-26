@@ -13,6 +13,8 @@
 <div id="dmgOv"></div><div id="supOv"></div><div id="lowOv"></div><div id="vig"></div>
 <div id="scopeOv"></div>
 <div id="dirHits"></div>
+<div id="chatLog"></div>
+<div id="chatBar"><input id="chatInput" maxlength="120" autocomplete="off" spellcheck="false"></div>
 <div id="ammoPanel"><span id="wname">M1 加兰德</span><span id="wmode">半自动</span><div class="ammoRow"><span id="magN">8</span> <span id="resN">/ 72</span></div><div id="nadeN">手雷 ×3</div></div>
 <div id="healthPanel"><span id="hpNum">100</span><span id="hpBarWrap"><span id="hpBar" style="display:block"></span></span><div id="stamBarWrap"><div id="stamBar"></div></div></div>
 <div id="minimapWrap"><canvas id="minimap" width="190" height="190"></canvas></div>
@@ -34,7 +36,7 @@
 <div id="tankSight"></div>
 <div id="mgPip"></div>
 <div id="heatWrap"><div id="heatFill"></div></div>
-<div id="scoreboard"><h3>战 场 记 分 板</h3><div id="sbCols"><div><table><thead><tr><th class="t0h">盟军</th><th>击杀</th><th>阵亡</th><th>得分</th></tr></thead><tbody id="sbL"></tbody></table></div><div><table><thead><tr><th class="t1h">德军</th><th>击杀</th><th>阵亡</th><th>得分</th></tr></thead><tbody id="sbR"></tbody></table></div></div></div>
+<div id="scoreboard"><h3>战 场 记 分 板</h3><div id="sbCols"><div><table><thead><tr><th class="t0h">盟军</th><th>击杀</th><th>阵亡</th><th>得分</th><th>延迟</th></tr></thead><tbody id="sbL"></tbody></table></div><div><table><thead><tr><th class="t1h">德军</th><th>击杀</th><th>阵亡</th><th>得分</th><th>延迟</th></tr></thead><tbody id="sbR"></tbody></table></div></div><div class="sbHint">★ 你 · ● 真人玩家</div></div>
 <div id="fps"></div>
 <div id="clsTip"></div>
 <div id="blackOv"></div>
@@ -100,6 +102,7 @@
 <div class="sliderRow">密码 <input id="acctPass" type="password" minlength="6" placeholder="至少6位密码"></div>
 <div class="sliderRow"><label><input id="acctAutoLogin" type="checkbox" checked> 自动登录（仅本机）</label><span class="val">不会保存密码</span></div>
 <div id="acctState" class="secLabel">登录后战功积分将绑定账号</div>
+<div id="acctStats" class="secLabel">真人对战战绩：登录后显示</div>
 <div class="center" style="margin-top:22px"><button class="bigBtn" id="acctLogin">登 录</button><button class="bigBtn" id="acctRegister">注 册</button><button class="bigBtn backBtn">返 回</button></div>
 </div>
 <div id="mNet" class="mSub hidden">
@@ -163,6 +166,7 @@
 <div><b>B</b> 兵种技能 — 医护:放医疗箱 · 迫击炮兵:架设/回收迫击炮 · 工程兵:建造工事</div>
 <div><b>5</b> 工程兵切换工事(沙袋墙/铁丝网/拒马/MG42) · 架好的迫击炮全员可 <b>F</b> 操作</div>
 <div><b>T</b> 小队进攻标记 · <b>Y</b> 小队跟随 · <b>Tab</b> 记分板 · 坦克可直接撞毁砖墙</div>
+<div><b>Enter</b> 联机聊天 · <b>U</b> 队伍聊天（仅联机对战中可用）</div>
 <div style="margin-top:6px;color:#b8c8a0"><b>载具:</b> 坦克有分区装甲与击穿判定(打侧后与薄弱部位) · 敞篷车乘员可被直接击杀 · 手雷可扔上车顶/掉入敞篷舱 · 坦歼射界有限需转车体 · 运兵车靠近按 <b>F</b> 上车斗, 车斗内可直接开枪, 附近小队会自动上你的车</div>
 <div style="color:#b8c8a0"><b>飞机:</b> <b>W/S</b> 油门 · <b>A/D</b> 压坡滚转 · <b>Q/E</b> 方向舵 · 鼠标拉杆 · 低速会失速下坠, 俯冲换速度, 爬升耗能量</div>
 <div style="margin-top:6px;color:#c8b98a"><b>提示:</b> 若右键(瞄准)会触发浏览器"鼠标手势"，请关闭浏览器的手势功能：Edge 在 设置→外观→自定义浏览器→鼠标手势 中关闭；或关闭手势类扩展。也可以把上方"右键瞄准方式"改为<b>切换模式</b>，无需按住右键。</div>

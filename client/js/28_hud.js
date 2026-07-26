@@ -52,17 +52,30 @@ el('dirHits').appendChild(d);
 setTimeout(()=>d.remove(),900);
 }
 function updateScoreboard(){
+const net=typeof NetPlay!=='undefined'&&NetPlay.started;
+// 真人玩家（含自己）与本地 BOT 一起排进记分板；真人带延迟显示
 const mk=(team,tb)=>{
-const rows=[];
-const list=combatants.filter(c=>c.team===team);
-list.sort((a,b)=>(b.score||0)-(a.score||0));
-for(const c of list){
-rows.push(`<tr class="${c.isPlayer?'meRow':''}"><td>${c.isPlayer?'★ 你':c.name}</td><td>${c.kills||0}</td><td>${c.deaths||0}</td><td>${c.score||0}</td></tr>`);
+const list=combatants.filter(c=>c.team===team).map(c=>({
+name:c.isPlayer?(net?(Account.user()||'你'):'你'):c.name,
+kills:c.kills||0,deaths:c.deaths||0,score:c.score||0,
+me:!!c.isPlayer,human:!!c.isPlayer&&net,ping:c.isPlayer&&net?NetPlay.latency:0
+}));
+if(net)for(const p of NetPlay.peers.values()){
+if(p.team!==team)continue;
+list.push({name:p.name,kills:p.kills||0,deaths:p.deaths||0,score:p.score||0,me:false,human:true,ping:p.ping||0});
 }
+list.sort((a,b)=>b.score-a.score);
+const rows=list.map(c=>{
+const tag=c.me?'★ ':(c.human?'● ':'');
+const ping=c.human?(c.ping?c.ping+'ms':'—'):'BOT';
+return `<tr class="${c.me?'meRow':''}"><td>${tag}${esc(c.name)}</td><td>${c.kills}</td><td>${c.deaths}</td><td>${c.score}</td><td class="sbPing">${ping}</td></tr>`;
+});
 el(tb).innerHTML=rows.join('');
 };
 mk(0,'sbL'); mk(1,'sbR');
 }
+// 玩家名字来自服务端，插进 HTML 前必须转义
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 const mmC=el('minimap').getContext('2d');
 function drawMinimap(){
 const S=190, half=S/2, range=90;

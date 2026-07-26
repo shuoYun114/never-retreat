@@ -232,13 +232,13 @@ if(n.thrower&&n.thrower.isPlayer) showScorePop('顶部击穿!');
 } else {
 t.takeDmg(30,n.thrower);
 }
-splashDamage(n.pos,n.thrower,n.team,4,80,0);
+splashDamage(n.pos,n.thrower,n.team,4,80,0,'nade_top');
 return;
 }
 if(n.mortar){
 explosionFXSmall(n.pos);
 AudioSys.explosion(n.pos.distanceTo(camera.position)*0.85);
-splashDamage(n.pos,n.thrower,n.team,7.5,135,150);
+splashDamage(n.pos,n.thrower,n.team,7.5,135,150,'mortar');
 damageStructures(n.pos,7,210);
 crater(n.pos.x,n.pos.z,1.3,true);
 return;
@@ -247,13 +247,13 @@ if(n.at){
 spawnP(PT.flash,n.pos.x,n.pos.y+0.4,n.pos.z,0,2,0,2.4,15,0.14,1,0,true);
 for(let i=0;i<7;i++) spawnP(PT.dark,n.pos.x,n.pos.y+0.4,n.pos.z,rand(-2,2),rand(1,4),rand(-2,2),1.0,2.4,rand(0.8,1.4),0.85,0.6);
 AudioSys.explosion(n.pos.distanceTo(camera.position));
-splashDamage(n.pos,n.thrower,n.team,5,95,340);
+splashDamage(n.pos,n.thrower,n.team,5,95,340,'at');
 damageStructures(n.pos,5,130);
 crater(n.pos.x,n.pos.z,1.1,true);
 } else if(n.bomb){
 explosionFX(n.pos);
 AudioSys.explosion(n.pos.distanceTo(camera.position)*0.7);
-splashDamage(n.pos,n.thrower,n.team,9.5,170,260);
+splashDamage(n.pos,n.thrower,n.team,9.5,170,260,'bomb');
 damageStructures(n.pos,9,340);
 explodeAt(n.pos,n.thrower);
 } else {
@@ -264,6 +264,13 @@ function explodeAt(p,attacker){
 explosionFX(p);
 AudioSys.explosion(p.distanceTo(camera.position));
 damageStructures(p,4.5,45);
+// 真人玩家的伤害由服务端裁定；这里把掩体遮挡的判断结果一并上报
+if(attacker&&attacker.isPlayer&&typeof NetPlay!=='undefined')
+NetPlay.boom('nade',p,(o,s,d)=>{
+const dir=V3(s.x-o.x,s.y+0.9-o.y,s.z-o.z).normalize();
+const block=raycastWorld(V3(o.x,o.y+0.25,o.z),dir,d);
+return block&&block.dist<d-0.5;
+});
 for(const s of combatants){
 if(!s.alive||s.onVehicle) continue;
 const d=Math.hypot(s.pos.x-p.x,(s.pos.y+0.9)-p.y,s.pos.z-p.z);

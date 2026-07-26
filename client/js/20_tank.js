@@ -815,7 +815,7 @@ continue;
 if(hitSol){ hitSol.damage(200,s.owner,false); }
 explosionFXSmall(p);
 AudioSys.explosion(p.distanceTo(camera.position)*1.6);
-splashDamage(p,s.owner,s.team,5,s.kind==='at'?70:95,60);
+splashDamage(p,s.owner,s.team,5,s.kind==='at'?70:95,60,s.kind==='at'?'shell_at':'shell');
 damageStructures(p,6,s.kind==='at'?140:190);
 shells.splice(i,1);
 continue;
@@ -828,7 +828,9 @@ spawnP(PT.flash,p.x,p.y+0.3,p.z,0,1,0, 1.6,10,0.12,1,0,true);
 for(let i=0;i<6;i++) spawnP(PT.dark,p.x+rand(-0.5,0.5),p.y+rand(0.2,1),p.z+rand(-0.5,0.5), rand(-1.5,1.5),rand(1,3),rand(-1.5,1.5), rand(0.6,1),1.8,rand(0.7,1.3),0.8,0.6);
 for(let i=0;i<6;i++) spawnP(PT.dirt,p.x,p.y+0.2,p.z, rand(-4,4),rand(2,6),rand(-4,4), rand(0.25,0.5),0.5,rand(0.5,0.9),0.9,8);
 }
-function splashDamage(p,attacker,team,radius,dmgMax,dmgVeh){
+function splashDamage(p,attacker,team,radius,dmgMax,dmgVeh,kind){
+// 真人玩家的溅射伤害由服务端按爆炸表裁定（本地只算 BOT 与载具）
+if(kind&&attacker&&attacker.isPlayer&&typeof NetPlay!=='undefined') NetPlay.boom(kind,p);
 for(const s of combatants){
 if(!s.alive||s.onVehicle) continue;
 if(s.team===team&&s!==attacker) continue; // 不误伤队友, 但炸自己会受伤

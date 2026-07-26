@@ -1,7 +1,7 @@
 'use strict';
 // 房主制联机：房主创建六码房间，成员按房间号加入，全部准备后由房主开始。
 // 战役/规模由房主决定；成员本地战役不一致时会在开局前自动重载并自动回到房间。
-const NetPlay={ws:null,id:null,room:'',peers:new Map(),lastSend:0,lastTicket:0,status:'未连接',host:false,ready:false,started:false,
+const NetPlay={ws:null,id:null,room:'',peers:new Map(),lastSend:0,lastTicket:0,lastPing:0,latency:0,status:'未连接',host:false,ready:false,started:false,
 config:{campaign:0,size:0,hostTeam:0,name:''},onLobbyUpdate:null,_resume:false,_retry:0,
 init(){
  try{
@@ -78,6 +78,9 @@ receive(e){
  else if(m.type==='leave')this.remove(m.id);
  else if(m.type==='state'&&m.id!==this.id){const p=this.peers.get(m.id);if(p){p.target=m.state;p.hp=m.hp??p.hp;}}
  else if(m.type==='damage')this.damage(m);
+ else if(m.type==='latency'){if(Number.isFinite(m.t))this.latency=Math.max(1,Math.round(performance.now()-m.t));}
+ else if(m.type==='pings'){for(const [id,v] of Object.entries(m.p||{})){const q=this.peers.get(id);if(q)q.ping=v|0;}}
+ else if(m.type==='chat')addChatLine(m.from,m.txt,m.team,m.mine);
  else if(m.type==='tickets'){
   // 守方无限票在 JSON 里是 null，收回来要还原成 Infinity，否则 HUD 会显示 0
   if(Array.isArray(m.t)){tickets[0]=m.t[0]===null?Infinity:m.t[0];tickets[1]=m.t[1]===null?Infinity:m.t[1];}
@@ -112,13 +115,18 @@ begin(m){
 },
 add(p){
  if(!p||p.id===this.id||this.peers.has(p.id))return;
- this.peers.set(p.id,{id:p.id,name:p.name||'士兵',team:p.team===1?1:0,target:p.state||null,hp:p.hp??100,mesh:null,ready:!!p.ready});
+ this.peers.set(p.id,{id:p.id,name:p.name||'士兵',team:p.team===1?1:0,target:p.state||null,hp:p.hp??100,mesh:null,
+  ready:!!p.ready,score:p.score||0,kills:p.kills||0,deaths:p.deaths||0,ping:p.ping||0});
 },
 remove(id){const p=this.peers.get(id);if(p?.mesh)scene.remove(p.mesh.root);this.peers.delete(id);},
 clear(){[...this.peers.keys()].forEach(id=>this.remove(id));},
 damage(m){
  const target=this.peers.get(m.target);
  if(target){target.hp=m.hp;if(m.killed&&target.mesh)target.mesh.root.visible=false;}
+ // 记分板要显示真人对手的战绩，这里跟着服务端的判定更新
+ if(target&&m.killed)target.deaths=m.deaths;
+ const shooter=this.peers.get(m.attacker);
+ if(shooter){shooter.score=m.score;shooter.kills=m.kills;}
  // 真人阵亡的兵力损失由房主统一扣，成员本地不扣(否则会和房主的权威票数对不上)
  if(this.host&&m.killed){
   const t=m.target===this.id?player.team:target?.team;
@@ -142,6 +150,20 @@ shoot(target,origin,dir,def,head){
  if(!def?.id)return;
  this.send({type:'shot',target:target.id,w:def.id,ox:origin.x,oy:origin.y,oz:origin.z,dx:dir.x,dy:dir.y,dz:dir.z});
 },
+// 上报"哪种爆炸、炸在哪"，威力与半径由服务端爆炸表裁定。
+// 顺带把"这个目标被掩体挡住了"告诉服务端——这只会让伤害变小，所以服务端可以采信。
+boom(kind,p,los){
+ if(!this.started||this.ws?.readyState!==1)return;
+ const t=[];
+ for(const q of this.peers.values()){
+  const s=q.target;
+  if(!s||!s.alive||q.team===player.team)continue;
+  const d=Math.hypot(s.x-p.x,(s.y+0.9)-p.y,s.z-p.z);
+  if(d>10)continue;
+  t.push({id:q.id,b:los&&los(p,s,d)?1:0});
+ }
+ this.send({type:'boom',k:kind,x:p.x,y:p.y,z:p.z,t});
+},
 tick(dt){
  if(!this.started)return;
  const now=performance.now();
@@ -153,6 +175,11 @@ tick(dt){
  if(this.host&&this.ws?.readyState===1&&now-this.lastTicket>1000){
   this.lastTicket=now;
   this.send({type:'tickets',t:[tickets[0],tickets[1]],time:matchTime});
+ }
+ // 每 2 秒测一次往返延迟，记分板上显示
+ if(this.ws?.readyState===1&&now-this.lastPing>2000){
+  this.lastPing=now;
+  this.send({type:'latency',t:now,rtt:this.latency});
  }
  for(const p of this.peers.values()){
   const s=p.target;
@@ -168,6 +195,55 @@ tick(dt){
 };
 // 联机时票数由房主裁定，成员不再本地扣票，否则同一局各人票数越打越偏
 function ticketsLocal(){return !(typeof NetPlay!=='undefined'&&NetPlay.started&&!NetPlay.host);}
+
+// ===================== 聊天 =====================
+// 名字与内容都来自服务端，只用 textContent 写入，不拼 HTML
+const CHAT_KEEP=8;
+let chatTimer=null;
+function addChatLine(from,txt,team,mine){
+ const box=document.getElementById('chatLog');
+ if(!box)return;
+ const row=document.createElement('div');
+ row.className='chatRow'+(team?' chatTeam':'')+(mine?' chatMine':'');
+ const who=document.createElement('span');
+ who.className='chatWho';
+ who.textContent=(team?'[队伍] ':'')+from+'：';
+ const msg=document.createElement('span');
+ msg.textContent=txt;
+ row.append(who,msg);
+ box.appendChild(row);
+ while(box.children.length>CHAT_KEEP)box.removeChild(box.firstChild);
+ box.classList.add('show');
+ clearTimeout(chatTimer);
+ chatTimer=setTimeout(()=>box.classList.remove('show'),9000);
+}
+// 开聊天输入框：Enter 全局，U 队伍
+function openChat(team){
+ if(typeof NetPlay==='undefined'||!NetPlay.ws||NetPlay.ws.readyState!==1)return;
+ const bar=document.getElementById('chatBar'),input=document.getElementById('chatInput');
+ if(!bar||!input||bar.classList.contains('show'))return;
+ bar.classList.add('show');
+ input.dataset.team=team?'1':'';
+ input.placeholder=team?'队伍消息…（Enter 发送，Esc 取消）':'全局消息…（Enter 发送，Esc 取消）';
+ input.value='';
+ document.exitPointerLock&&document.exitPointerLock();
+ input.focus();
+}
+function closeChat(){
+ const bar=document.getElementById('chatBar'),input=document.getElementById('chatInput');
+ if(!bar)return;
+ bar.classList.remove('show');
+ if(input)input.value='';
+ if(player.alive&&player.deployed&&!matchOver)lockPointer();
+}
+function sendChat(){
+ const input=document.getElementById('chatInput');
+ if(!input)return;
+ const text=input.value.trim().slice(0,120);
+ if(text)NetPlay.send({type:'chat',text,team:!!input.dataset.team});
+ closeChat();
+}
+function chatOpen(){const b=document.getElementById('chatBar');return !!b&&b.classList.contains('show');}
 function updateNetUI(){
  const e=document.getElementById('netState'),members=document.getElementById('netMembers'),code=document.getElementById('netRoom'),name=document.getElementById('netName');
  if(e)e.textContent='联机：'+NetPlay.status+(NetPlay.room?' · 加入代码 '+NetPlay.room:'');

@@ -36,6 +36,12 @@ In multiplayer none of the following trusts the client:
 
 - **Damage and headshots** — the client only reports *which weapon* (weapon id) and *from where to where*.
   Damage comes from the server weapon table; headshots are decided geometrically by the server.
+- **Explosions** (grenades, mortars, rockets, bombs, tank shells) — the client only reports *which kind of
+  explosion* and *where it went off*. Blast power, radius and falloff come from the server table, and the
+  impact point, cooldown and class eligibility are all validated. A client may additionally report that a
+  target was behind cover; that flag can only reduce damage, so it is safe to trust.
+- **Career stats** — PvP kills/deaths are counted server-side; matches and wins are registered when a match
+  ends and only for matches that lasted long enough. Solo bot results never count.
 - **Rate of fire** — minimum interval per shot derived from each weapon's rpm.
 - **Weapon legality** — whether that account and that class may use that weapon (class-issued table + purchases).
 - **Hit validation** — ray-to-capsule distance, range cap, and the muzzle position must be close to the
