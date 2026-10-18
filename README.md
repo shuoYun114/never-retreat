@@ -1,134 +1,173 @@
 # 钢铁前线 / Never Retreat
 
-[English](README_EN.md)
+<div align="center">
 
-> **Never Retreat**
+[English](README_EN.md) · **简体中文**
 
-一款浏览器运行的二战低多边形第一人称战场游戏。支持单人 BOT 战役、房间联机、账号战功、武器商店、兵种配装，以及手机横屏触控操作。
+> **Never Retreat** — 一款浏览器原生运行的二战低多边形 3D 第一人称战场射击游戏。
 
-![License](https://img.shields.io/badge/license-MIT-green)
-![Node](https://img.shields.io/badge/Node.js-18%2B-339933)
+[![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg?style=flat-square)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
+[![Three.js](https://img.shields.io/badge/Three.js-WebGL-black?style=flat-square&logo=three.js)](https://threejs.org/)
+[![Multiplayer](https://img.shields.io/badge/Multiplayer-Room_Based-orange?style=flat-square)](https://github.com/shuoYun114/never-retreat)
 
-## 致谢与原作者
+<p align="center">
+  <b>无需安装独立客户端，纯现代浏览器畅玩；支持单人 BOT 战役、房间多端联机、账号战功结算、战地商店与手机横屏双摇杆触控。</b>
+</p>
 
-原作者：[@stupid_scout](https://b23.tv/KibKesr)  
-UID：`517637254`
+</div>
 
-本仓库在原作基础上继续进行网页化、联机、账号资产、移动端触控与玩法功能开发。若你使用、转载或二次开发，请保留这份署名。
+---
 
-## 功能
+## 📸 游戏实机与演示 (Screenshots & Demo)
 
-- 二战题材第一人称战场：步兵、坦克、飞机、运兵车、火炮、机枪与迫击炮
-- 攻防、征服、破袭等战役玩法；所有据点可自由争夺，不强制按 A → B → C 顺序
-- 单人 BOT 战役与房主制真人联机（六位房号加入，房主统一战役、规模与阵营）
-- 服务端权威裁定：伤害、爆头、射速、爆炸威力与战功发放全部由服务端判定，客户端不参与
-- 队友复活点：在存活的小队成员或真人队友身边部署，附近有敌军时自动禁用
-- 联机聊天：全局与队伍两个频道，大厅与局内通用
-- 战场记分板：真人对手与 BOT 分别标注，附带往返延迟
-- 服务端账号：积分、已购枪械、改装与兵种配装按账号保存
-- 真人对战累计战绩：场次、胜负、胜率与 K/D，由服务端记账
-- 战地商店：步枪、狙击枪、突击枪、手枪与配件
-- 背包配装：不同兵种独立选择主武器和改装
-- 单设备登录：同账号后登录会使旧会话失效
-- 手机横屏：双摇杆/按键、暂停菜单、陀螺仪辅助瞄准
+<div align="center">
+  <img src="https://img.shields.io/badge/Battlefield-WWII_Low--Poly-blue?style=for-the-badge" alt="Cover" />
+  <p><i>⚔️ 二战全要素沙盒战场：步兵、重装坦克、战机俯冲与野战火炮协同</i></p>
+</div>
 
-## 目录
+> [!NOTE]
+> 🎮 **原作者致谢**：原作者 [@stupid_scout](https://b23.tv/KibKesr) (UID: 517637254)。  
+> 本仓库在原作优秀底层基础上，持续推进 Web 端深度移植、WebSocket 房间联机、账号资产持久化、移动端陀螺仪触控与全要素玩法演进。
 
-```text
-client/              静态客户端网页
-  index.html
-  css/
-  js/
-  vendor/
-server/              Node.js 账号、结算与联机服务
-  server.js
-  lib/
-  test/
+---
+
+## ✨ 核心玩法特性 (Features)
+
+- **全要素二战沙盒战局**：操纵步兵、重型坦克、战机、运兵卡车、野战火炮、高平两用机枪与迫击炮协同作战。
+- **动态战术夺旗征服**：非线性据点争夺体系，无固定推进限制，全战场据点自由机动占领。
+- **双模体验**：
+  - **单人战役**：高拟真智能 BOT 战术包抄与火力压制。
+  - **房主制多人联机**：通过 6 位房号快速集结，房主自主把控战役规模、兵力上限与阵营分配。
+- **服务端权威裁定 (Authoritative Server)**：枪械弹道、爆头修正、爆炸冲击波衰减及战功发放全量由服务端裁决，严防本地修改作弊。
+- **小队动态战术部署**：支持在存活小队成员身边切入战场（周边处于敌火交战区时动态封锁）。
+- **局内全域通信**：队伍与全局双频道即时战术文字沟通。
+- **战绩与装备成长体系**：胜率、场次、K/D 服务端安全记账；用战功在战地商店换购枪械配件并进行多兵种个性化配装。
+- **全端跨平台触控适配**：手机与平板横屏专属虚拟双摇杆、HUD 动态排布及原生陀螺仪辅助瞄准微调。
+
+---
+
+## 🏗️ 系统架构设计 (Architecture)
+
+游戏采用客户端轻量化渲染 + 服务端权威状态判定的架构体系：
+
+```mermaid
+graph TD
+    subgraph Client ["前端客户端 (Browser / Mobile)"]
+        UI[HUD 仪表盘 / 触控 / 键鼠输入] --> Controller[玩家移动与视线控制器]
+        Controller --> RenderEngine[Three.js WebGL 3D 渲染主循环]
+        NetClient[WebSocket 客户端网络层] <--> ServerSync[预测回放与插值平滑]
+    end
+
+    subgraph Server ["权威服务端 (Node.js Service)"]
+        WS[WebSocket 连接分发网关] --> RoomMgr[战役房间与实例调度]
+        RoomMgr --> Physics[服务端物理判定 & 弹道伤害计算]
+        RoomMgr --> AccountDB[账号资产、结算与战功持久化 (JSON/DB)]
+    end
+
+    NetClient <==> |TCP/WSS 状态帧同步| WS
 ```
 
-> `server/data/accounts.json` 是运行时账户数据，包含密码哈希与玩家资产，**不会上传到 GitHub**。
+---
 
-## 本地启动
+## 🛠️ 安装指南 (Installation)
 
-### 1. 准备环境
+### 1. 运行环境准备 (Prerequisites)
+- [Node.js](https://nodejs.org/) (推荐 v18.0 或更高版本)
+- Python 3（用于本地轻量静态网页托管，或任意 Web 服务器如 Nginx / Caddy）
 
-- Node.js 18 或更高版本
-- Python 3（仅用于快速启动静态客户端）
+### 2. 克隆项目
 
-### 2. 启动服务端
+```bash
+git clone https://github.com/shuoYun114/never-retreat.git
+cd never-retreat
+```
+
+---
+
+## 🚀 使用指南 (Usage)
+
+### 1. 启动联机服务端 (Game Server)
 
 ```bash
 cd server
 node server.js
 ```
+*服务端默认监听本地 `http://127.0.0.1:18080`。*
 
-默认监听 `http://127.0.0.1:18080`。
+### 2. 启动客户端网页 (Web Client)
 
-### 3. 启动客户端
-
-另开一个终端：
+另起终端窗口：
 
 ```bash
 cd client
 python -m http.server 18081
 ```
 
-浏览器打开：
-
+在现代浏览器中直接访问：
 ```text
 http://127.0.0.1:18081
 ```
 
-### 4. 配置远程服务端（可选）
+### 3. 操作按键指南 (Keybindings)
 
-编辑 `client/js/35_server_config.js`：
+| 核心动作 | 键盘 / 鼠标按键 | 手机触控交互 |
+| :--- | :--- | :--- |
+| **机动 / 战术冲刺** | `W` `A` `S` `D` / `Shift` | 左侧虚拟操纵摇杆 |
+| **开火 / 机械瞄准** | 鼠标左键 / 鼠标右键 | 右侧射击按键 / 陀螺仪微调 |
+| **战术换弹 / 切枪** | `R` / 数字键 `1` `2` | 屏幕专用 HUD 快捷图标 |
+| **手雷 / 烟雾弹 / 地雷** | `G` / `4` / `3` | 右侧投掷物专属浮层 |
+| **载具乘降与交互** | `F` | 场景准星交互感知弹窗 |
+| **暂停 / 战役结算** | `Esc` | 顶部汉堡菜单按钮 `≡` |
 
-```js
-window.STEEL_FRONT_SERVER = 'http://你的服务器域名:18080';
-```
+---
 
-生产环境请使用 HTTPS/WSS；不要把账号数据库放在 `client/` 静态目录里。
+## 🧪 自动化测试 (Testing)
 
-## 如何游玩
-
-1. 打开游戏后，先在 **账号登录** 注册或登录账号。
-2. 在 **开始游戏** 选择阵营、难度和兵力规模，点击“进入战场”。
-3. 在部署页选择兵种与出生点，点击“部署”。
-4. 通过占领据点、击杀敌人和完成战役获得战绩；自然结束或中途结束对局时会由服务端执行一次结算。
-5. 在 **战地商店** 用战功购买枪械与配件；在 **背包配装** 为兵种保存装备。
-
-### 键鼠操作
-
-| 操作 | 按键 |
-|---|---|
-| 移动 / 疾跑 | WASD / Shift |
-| 射击 / 瞄准 | 鼠标左键 / 右键 |
-| 换弹、切枪、近战 | R、1/2、V |
-| 手雷 / 烟雾 / AT 雷 | G、4、3 |
-| 互动 | F |
-| 兵种技能 | B |
-| 暂停 / 中途结束 | Esc |
-
-### 手机操作
-
-建议横屏游玩。左侧虚拟摇杆移动，右侧按钮开火、瞄准、换弹和投掷。右上角：
-
-- **陀螺仪**：首次点击允许浏览器“动作与方向”权限，转动手机辅助微调瞄准。
-- **≡**：打开暂停菜单，可以继续或结束本局。
-
-## 测试
+服务端包含严谨的账号资产结算与比赛状态流转自动化测试：
 
 ```bash
 cd server
 node --test test/account-assets.test.js test/match-settlement.test.js
 ```
 
-## 安全和部署提示
+---
 
-- 不要提交 `server/data/accounts.json`、`.env`、日志、NAS 备份或任何密码。
-- 当前 JSON 账户库适合小规模单实例；多人正式运营建议迁移 SQLite/PostgreSQL。
-- 真人 PvP 的击杀奖励由服务端即时记录；客户端本地状态不能作为可信资产来源。
+## 🚢 部署说明 (Deployment)
 
-## 许可证
+### 远程私有化联机部署
 
-本仓库采用 [MIT License](LICENSE)。原作署名请保留。
+若需公网多人联机，请按如下步骤配置：
+1. 将 `server/` 部署至具备公网 IP 的 VPS，并使用 PM2 或 Docker 进行守护。
+2. 编辑 `client/js/35_server_config.js`，指定你的公网服务网关：
+   ```javascript
+   window.STEEL_FRONT_SERVER = 'https://game.your-domain.com:18080';
+   ```
+3. 强烈推荐前置 Nginx 配置 SSL/TLS 证书以开启 WSS 安全长连接。
+
+---
+
+## 📡 通信协议规范 (API & Protocol)
+
+客户端与服务端通过标准化 JSON WebSocket 报文进行帧状态交互：
+
+```typescript
+// 战局结算通知报文结构
+interface MatchSettlementPayload {
+  roomId: string;
+  matchDuration: number;
+  winnerFaction: 'Allies' | 'Axis';
+  personalStats: {
+    kills: number;
+    headshots: number;
+    deaths: number;
+    scoreGained: number;
+  };
+}
+```
+
+---
+
+## 📄 开源许可证 (License)
+
+本项目基于 [MIT License](LICENSE) 开源。二次开发请务必遵循并保留原作者与后续贡献者版权声明。
